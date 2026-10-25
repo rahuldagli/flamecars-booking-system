@@ -1,20 +1,20 @@
 import { NextResponse } from 'next/server';
 
-const EXPECTED_EMAIL = (process.env.STAFF_ADMIN_EMAIL || 'admin@flamecars.co.uk').trim().toLowerCase();
-const EXPECTED_PASSWORD = (process.env.STAFF_ADMIN_PASSWORD || 'FlameCars#Admin2026!Sec').trim();
-
 export async function POST(req: Request) {
   try {
+    const expectedEmail = (process.env.STAFF_ADMIN_EMAIL || 'admin@flamecars.co.uk').trim().toLowerCase();
+    const expectedPassword = (process.env.STAFF_ADMIN_PASSWORD || 'FlameCars#Admin2026!Sec').trim();
+
     const { email, password } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const inputEmail = email.trim().toLowerCase();
-    const inputPassword = password.trim();
+    const inputEmail = String(email).trim().toLowerCase();
+    const inputPassword = String(password).trim();
 
-    if (inputEmail !== EXPECTED_EMAIL || inputPassword !== EXPECTED_PASSWORD) {
+    if (inputEmail !== expectedEmail || inputPassword !== expectedPassword) {
       return NextResponse.json(
         { error: 'Invalid staff email or password. Please check your credentials.' },
         { status: 401 }
