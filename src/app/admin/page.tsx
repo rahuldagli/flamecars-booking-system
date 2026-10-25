@@ -3,7 +3,23 @@
 import { useState, useEffect } from 'react';
 import { DriverApplication, DocumentType, REQUIRED_DOCUMENTS_CONFIG } from '@/types/onboarding';
 
+interface StaffUser {
+  name: string;
+  email: string;
+  role: string;
+}
+
 export default function AdminDashboardPage() {
+  // Authentication states
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Dashboard states
   const [applications, setApplications] = useState<DriverApplication[]>([]);
   const [selectedApp, setSelectedApp] = useState<DriverApplication | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
@@ -16,6 +32,80 @@ export default function AdminDashboardPage() {
   const [inspectDocType, setInspectDocType] = useState<DocumentType | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
+  // Check authentication on mount
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const savedToken = typeof window !== 'undefined' ? localStorage.getItem('fc_staff_token') : null;
+        const res = await fetch('/api/admin/me', {
+          headers: savedToken ? { Authorization: `Bearer ${savedToken}` } : {},
+        });
+        const data = await res.json();
+        if (res.ok && data.authenticated) {
+          setIsAuthenticated(true);
+          setCurrentUser(data.user);
+          loadApplications();
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch {
+        setIsAuthenticated(false);
+      }
+    }
+    checkSession();
+  }, []);
+
+  // Handle Staff Login
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setLoginError('Please enter both staff email and password.');
+      return;
+    }
+
+    setLoginError('');
+    setLoginLoading(true);
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        if (typeof window !== 'undefined' && data.token) {
+          localStorage.setItem('fc_staff_token', data.token);
+        }
+        setIsAuthenticated(true);
+        setCurrentUser(data.user);
+        loadApplications();
+      } else {
+        setLoginError(data.error || 'Authentication failed. Please verify your credentials.');
+      }
+    } catch {
+      setLoginError('Connection error. Please try again.');
+    } finally {
+      setLoginLoading(false);
+    }
+  }
+
+  // Handle Staff Logout
+  async function handleLogout() {
+    try {
+      await fetch('/api/admin/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('fc_staff_token');
+    }
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setSelectedApp(null);
+  }
+
   // Load applications
   async function loadApplications() {
     setLoading(true);
@@ -24,7 +114,6 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (res.ok) {
         setApplications(data.applications || []);
-        // Seed demo application if empty
         if (data.applications?.length === 0) {
           seedDemoDriver();
         }
@@ -165,10 +254,6 @@ export default function AdminDashboardPage() {
     loadApplications();
   }
 
-  useEffect(() => {
-    loadApplications();
-  }, []);
-
   // Handle Document Approval / Rejection
   async function handleDocReview(docType: DocumentType, action: 'APPROVE' | 'REJECT', reason?: string) {
     if (!selectedApp) return;
@@ -247,9 +332,189 @@ export default function AdminDashboardPage() {
     return true;
   });
 
+  // 1. Loading State while checking authentication
+  if (isAuthenticated === null) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <div style={{ color: 'var(--flame-400)', fontSize: '15px' }}>Verifying Staff Session...</div>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated: Render Staff Portal Login Form
+  if (!isAuthenticated) {
+    return (
+      <div className="container" style={{ paddingTop: '60px', maxWidth: '440px' }}>
+        <div className="glass-panel animate-fade-in" style={{ padding: '36px 30px', borderRadius: 'var(--radius-xl)' }}>
+          {/* Logo & Header */}
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <div
+              style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '14px',
+                background: 'var(--flame-gradient)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 14px auto',
+                boxShadow: 'var(--flame-glow)',
+              }}
+            >
+              <span style={{ fontSize: '28px' }}>🔥</span>
+            </div>
+            <h1 style={{ fontSize: '24px', marginBottom: '6px' }}>Staff & Compliance Portal</h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+              Restricted access for Flame Cars operations and compliance officers.
+            </p>
+          </div>
+
+          {loginError && (
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--danger-bg)',
+                color: 'var(--danger)',
+                fontSize: '13px',
+                marginBottom: '20px',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+              }}
+            >
+              {loginError}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                Staff Email Address
+              </label>
+              <input
+                type="email"
+                placeholder="admin@flamecars.co.uk"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            <div style={{ marginBottom: '22px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600 }}>Password</label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ background: 'transparent', color: 'var(--flame-400)', fontSize: '12px', border: 'none' }}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••••••"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="btn-primary"
+              style={{ width: '100%', padding: '14px', fontSize: '15px' }}
+            >
+              {loginLoading ? 'Signing In...' : 'Sign In to Staff Portal &rarr;'}
+            </button>
+          </form>
+
+          {/* Quick Demo Helper Box */}
+          <div
+            style={{
+              marginTop: '24px',
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'rgba(245, 158, 11, 0.08)',
+              border: '1px dashed rgba(245, 158, 11, 0.35)',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontWeight: 700, color: 'var(--flame-400)' }}>🔑 Configured Credentials (.env.local)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginEmail('admin@flamecars.co.uk');
+                  setLoginPassword('FlameCars#Admin2026!Sec');
+                }}
+                style={{
+                  background: 'transparent',
+                  color: 'var(--flame-400)',
+                  textDecoration: 'underline',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                }}
+              >
+                Auto-fill
+              </button>
+            </div>
+            <div>Email: <strong style={{ color: '#fff' }}>admin@flamecars.co.uk</strong></div>
+            <div>Password: <strong style={{ color: '#fff' }}>FlameCars#Admin2026!Sec</strong></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Authenticated: Render Full Dashboard
   return (
-    <div className="container" style={{ paddingTop: '28px', maxWidth: '1100px' }}>
-      {/* Header */}
+    <div className="container" style={{ paddingTop: '24px', maxWidth: '1100px' }}>
+      {/* Top Staff Auth Bar */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          padding: '10px 16px',
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-subtle)',
+          marginBottom: '20px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+          <span>👤</span>
+          <span>
+            Signed in as: <strong style={{ color: '#fff' }}>{currentUser?.email || 'admin@flamecars.co.uk'}</strong>
+          </span>
+          <span className="badge badge-approved" style={{ fontSize: '10px', padding: '2px 8px' }}>
+            {currentUser?.role || 'SUPER_ADMIN'}
+          </span>
+        </div>
+
+        <button
+          onClick={handleLogout}
+          style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            color: 'var(--danger)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '5px 12px',
+            fontSize: '12px',
+            fontWeight: 600,
+          }}
+        >
+          Sign Out
+        </button>
+      </div>
+
+      {/* Main Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px' }}>
         <div>
           <h1 style={{ fontSize: '26px', marginBottom: '4px' }}>Compliance & Onboarding Dashboard</h1>
