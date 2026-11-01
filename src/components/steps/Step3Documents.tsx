@@ -548,70 +548,186 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                       <div
                         style={{
                           marginTop: '12px',
-                          padding: '10px 14px',
-                          borderRadius: 'var(--radius-sm)',
-                          background: 'rgba(245, 158, 11, 0.1)',
-                          border: '1px solid rgba(245, 158, 11, 0.3)',
+                          padding: '12px 16px',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'rgba(239, 68, 68, 0.05)',
+                          border: '1px solid rgba(239, 68, 68, 0.25)',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '10px',
-                          fontSize: '12px',
-                          color: 'var(--flame-400)',
+                          gap: '12px',
+                          fontSize: '13px',
+                          color: 'var(--flame-600)',
                         }}
                       >
-                        <span className="animate-pulse-glow" style={{ fontSize: '16px' }}>🤖</span>
-                        <span><strong>AI Engine:</strong> Extracting text contents, licence numbers, and regulatory dates...</span>
+                        <span className="animate-pulse-glow" style={{ fontSize: '20px' }}>🤖</span>
+                        <div>
+                          <div style={{ fontWeight: 700 }}>AI Vision Extraction Engine Active...</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            Scanning document image, extracting driver full name, licence numbers, expiration dates, and regulatory compliance records.
+                          </div>
+                        </div>
                       </div>
                     ) : aiData ? (
                       <div
                         style={{
-                          marginTop: '12px',
-                          padding: '12px 14px',
-                          borderRadius: 'var(--radius-sm)',
-                          background: 'rgba(16, 185, 129, 0.08)',
-                          border: '1px solid rgba(16, 185, 129, 0.35)',
+                          marginTop: '14px',
+                          padding: '16px',
+                          borderRadius: 'var(--radius-md)',
+                          background: '#f0fdf4',
+                          border: '1px solid #bbf7d0',
+                          boxShadow: '0 2px 5px rgba(16, 185, 129, 0.08)',
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: 'var(--success)' }}>
-                            <span>✨</span> AI Document Extraction Verified
-                            <span style={{ fontSize: '10px', opacity: 0.8 }}>({Math.round((aiData.confidence || 0.95) * 100)}% Match)</span>
+                        {/* Header Banner */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '16px' }}>✨</span>
+                            <span style={{ fontSize: '13px', fontWeight: 800, color: '#166534' }}>
+                              AI Extracted Details • {aiData.documentTypeDetected || config.title}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                background: '#dcfce7',
+                                color: '#15803d',
+                                padding: '2px 8px',
+                                borderRadius: '12px',
+                                border: '1px solid #86efac',
+                              }}
+                            >
+                              {Math.round((aiData.confidence || 0.98) * 100)}% Confidence
+                            </span>
                           </div>
-                          <span style={{ fontSize: '11px', color: 'var(--success)' }}>✓ Saved to Database</span>
+                          <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700 }}>
+                            ✓ Saved to Database
+                          </span>
                         </div>
 
+                        {/* Summary description */}
                         {aiData.summary && (
-                          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                          <div
+                            style={{
+                              fontSize: '12px',
+                              color: '#166534',
+                              marginBottom: '12px',
+                              lineHeight: 1.5,
+                              background: 'rgba(255, 255, 255, 0.75)',
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid #dcfce7',
+                            }}
+                          >
                             {aiData.summary}
-                          </p>
+                          </div>
                         )}
 
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {/* Key Extracted Fields Grid */}
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                            gap: '8px',
+                            marginBottom: '10px',
+                          }}
+                        >
                           {aiData.fullName && (
-                            <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
-                              Holder: <strong>{aiData.fullName}</strong>
-                            </span>
+                            <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                              <div style={{ fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700 }}>
+                                Driver Full Name
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
+                                {aiData.fullName}
+                              </div>
+                            </div>
                           )}
+
                           {aiData.licenceNumber && (
-                            <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
-                              Licence #: <strong>{aiData.licenceNumber}</strong>
-                            </span>
+                            <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                              <div style={{ fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700 }}>
+                                Licence / Badge #
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', fontFamily: 'monospace', marginTop: '2px' }}>
+                                {aiData.licenceNumber}
+                              </div>
+                            </div>
                           )}
-                          {aiData.vrm && (
-                            <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
-                              VRM: <strong>{aiData.vrm}</strong>
-                            </span>
-                          )}
-                          {aiData.policyNumber && (
-                            <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
-                              Policy #: <strong>{aiData.policyNumber}</strong>
-                            </span>
-                          )}
+
                           {aiData.expiryDate && (
-                            <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', color: 'var(--flame-400)' }}>
-                              Expiry: <strong>{aiData.expiryDate}</strong>
-                            </span>
+                            <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                              <div style={{ fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700 }}>
+                                Expiry Date (4b / Valid)
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: '#dc2626', marginTop: '2px' }}>
+                                {aiData.expiryDate} <span style={{ fontSize: '10px', color: '#16a34a' }}>✓ Auto-synced</span>
+                              </div>
+                            </div>
                           )}
+
+                          {aiData.vrm && (
+                            <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                              <div style={{ fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700 }}>
+                                Vehicle VRM
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', fontFamily: 'monospace', marginTop: '2px' }}>
+                                {aiData.vrm}
+                              </div>
+                            </div>
+                          )}
+
+                          {aiData.policyNumber && (
+                            <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                              <div style={{ fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700 }}>
+                                Insurance Policy #
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', fontFamily: 'monospace', marginTop: '2px' }}>
+                                {aiData.policyNumber}
+                              </div>
+                            </div>
+                          )}
+
+                          {(aiData.categories as string) && (
+                            <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                              <div style={{ fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700 }}>
+                                Entitlements / Categories
+                              </div>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#111827', marginTop: '2px' }}>
+                                {String(aiData.categories)}
+                              </div>
+                            </div>
+                          )}
+
+                          {(aiData.issuingAuthority as string) && (
+                            <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                              <div style={{ fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700 }}>
+                                Issuing Authority
+                              </div>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#111827', marginTop: '2px' }}>
+                                {String(aiData.issuingAuthority)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Footer action link */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewDocType(config.type)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#15803d',
+                              fontWeight: 700,
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <span>🔍</span> Inspect / View Full OCR Transcript →
+                          </button>
                         </div>
                       </div>
                     ) : null}

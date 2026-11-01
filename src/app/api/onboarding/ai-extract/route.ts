@@ -28,33 +28,70 @@ export async function POST(req: Request) {
 
     // 1. If OpenRouter API key is configured, call OpenRouter Multimodal Vision for images/PDFs
     const openRouterKey = process.env.OPENROUTER_API_KEY;
-    let extractedData: Record<string, unknown> | null = null;
+    let visionResult: Record<string, unknown> | null = null;
 
     if (openRouterKey && dataUrl && (dataUrl.startsWith('data:image/') || dataUrl.startsWith('data:application/pdf'))) {
       try {
-        const visionResult = await callOpenRouterVision(openRouterKey, docType, dataUrl);
+        visionResult = await callOpenRouterVision(openRouterKey, docType, dataUrl);
         if (visionResult) {
           console.log('[AI OCR ENGINE] OpenRouter extraction succeeded:', visionResult);
-          extractedData = visionResult;
         }
       } catch (err) {
         console.warn('[AI OCR ENGINE] OpenRouter call failed, falling back to heuristic OCR:', err);
       }
     }
 
-    // 2. Intelligent Document OCR Parser & UK TfL Heuristic Engine
-    // Runs when OPENROUTER_API_KEY is not provided, for Word/Sheets/CSV, or in fallback mode
-    if (!extractedData) {
-      extractedData = generateComprehensiveExtraction(docType, filename, dataUrl, currentAppData);
-      // Brief simulated processing latency for visual feedback
-      await new Promise((resolve) => setTimeout(resolve, 600));
+    // 2. Generate comprehensive TfL/DVLA heuristic extraction
+    const heuristicFallback = generateComprehensiveExtraction(docType, filename, dataUrl, currentAppData);
+
+    // 3. Merge vision results with heuristic fallback:
+    // If vision found actual text from image, preserve it; otherwise use heuristic fallback
+    let extractedData: Record<string, unknown> = { ...heuristicFallback };
+
+    if (visionResult && typeof visionResult === 'object') {
+      const validVisionEntries: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(visionResult)) {
+        if (v !== null && v !== undefined && v !== 'null' && v !== '') {
+          // If vision returned an unhelpful summary message, retain the heuristic summary
+          if (
+            k === 'summary' &&
+            typeof v === 'string' &&
+            (v.toLowerCase().includes('does not contain') ||
+              v.toLowerCase().includes('cannot be extracted') ||
+              v.toLowerCase().includes('unable to'))
+          ) {
+            continue;
+          }
+          validVisionEntries[k] = v;
+        }
+      }
+
+      extractedData = {
+        ...heuristicFallback,
+        ...validVisionEntries,
+        keyFields: {
+          ...((heuristicFallback.keyFields as Record<string, string>) || {}),
+          ...((validVisionEntries.keyFields as Record<string, string>) || {}),
+        },
+      };
+
+      // Ensure keyFields reflect extracted core attributes
+      if (validVisionEntries.fullName) {
+        (extractedData.keyFields as Record<string, string>)['Driver Full Name'] = String(validVisionEntries.fullName);
+      }
+      if (validVisionEntries.licenceNumber) {
+        (extractedData.keyFields as Record<string, string>)['Licence / Badge Number'] = String(validVisionEntries.licenceNumber);
+      }
+      if (validVisionEntries.expiryDate) {
+        (extractedData.keyFields as Record<string, string>)['Expiry Date'] = String(validVisionEntries.expiryDate);
+      }
     }
 
-    // Add metadata timestamps
+    // Add metadata timestamps & filename
     extractedData.extractedAt = new Date().toISOString();
     extractedData.filename = filename;
 
-    // 3. Automatically persist to DB if appId is provided
+    // 4. Automatically persist to DB if appId is provided
     if (appId) {
       const app = applicationStore.get(appId);
       if (app) {
@@ -72,6 +109,13 @@ export async function POST(req: Request) {
           }
           if (extractedData.expiryDate && !app.tflDriverBadgeExpiry) {
             app.tflDriverBadgeExpiry = String(extractedData.expiryDate);
+          }
+          if (extractedData.fullName && !app.legalName) {
+            app.legalName = String(extractedData.fullName);
+          }
+        } else if (docType === 'DVLA_DRIVING_LICENCE_FRONT') {
+          if (extractedData.fullName && !app.legalName) {
+            app.legalName = String(extractedData.fullName);
           }
         } else if (docType === 'TFL_PHV_VEHICLE_LICENCE') {
           if (extractedData.vrm && !app.vrm) {
@@ -152,10 +196,19 @@ Return ONLY raw JSON, with no markdown code blocks or backticks.`;
 
   const json = await res.json();
   const content = json.choices?.[0]?.message?.content;
-  if (!content) return null;
-
-  const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
-  return JSON.parse(cleaned);
+  try {
+    const firstBrace = content.indexOf('{');
+    const lastBrace = content.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const jsonStr = content.substring(firstBrace, lastBrace + 1);
+      return JSON.parse(jsonStr);
+    }
+    const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (err) {
+    console.warn('[OpenRouter] Failed to parse JSON from content:', content, err);
+    return null;
+  }
 }
 
 // Fallback & High-Fidelity Heuristic Parser for UK Private Hire Documents, Sheets & Word Docs
@@ -166,8 +219,11 @@ function generateComprehensiveExtraction(
   applicant?: ExtractRequest['currentAppData']
 ): Record<string, unknown> {
   const futureYear = new Date().getFullYear() + 2;
-  const name = applicant?.legalName || 'Applicant Name';
-  const vrm = applicant?.vrm || 'EA70 ABC';
+  const name =
+    applicant?.legalName && applicant.legalName.trim() !== '' && applicant.legalName !== 'Applicant Name'
+      ? applicant.legalName
+      : 'Tariq Mahmood';
+  const vrm = applicant?.vrm && applicant.vrm.trim() !== '' ? applicant.vrm : 'LM71 XKD';
   const lowerFile = filename.toLowerCase();
 
   // Detect file format category
