@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { DriverApplication, DocumentType, REQUIRED_DOCUMENTS_CONFIG } from '@/types/onboarding';
+import DocumentPreviewModal from '@/components/DocumentPreviewModal';
 
 interface StaffUser {
   name: string;
@@ -776,197 +777,62 @@ export default function AdminDashboardPage() {
         )}
       </div>
 
-      {/* Side-by-Side Document Inspection Modal */}
-      {inspectDocType && selectedApp && selectedApp.documents[inspectDocType] && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 100,
-            backgroundColor: 'rgba(15, 23, 42, 0.45)',
-            backdropFilter: 'blur(6px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
-        >
-          <div
-            className="glass-panel"
-            style={{
-              width: '100%',
-              maxWidth: '850px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              padding: '24px',
-              borderRadius: 'var(--radius-lg)',
-              background: '#ffffff',
-              border: '1px solid var(--border-medium)',
-              boxShadow: '0 20px 25px -5px rgba(15, 23, 42, 0.15)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '18px' }}>
-                Inspect: {selectedApp.documents[inspectDocType]!.title}
-              </h3>
-              <button
-                onClick={() => setInspectDocType(null)}
-                style={{ background: 'transparent', color: 'var(--text-muted)', fontSize: '22px' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px', marginBottom: '20px' }}>
-              {/* Document Image/Preview Viewer */}
-              <div
-                style={{
-                  background: '#000',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '280px',
-                  border: '1px solid var(--border-medium)',
-                }}
-              >
-                {selectedApp.documents[inspectDocType]!.mimeType?.includes('pdf') ||
-                selectedApp.documents[inspectDocType]!.filename?.toLowerCase().endsWith('.pdf') ? (
-                  <div style={{ textAlign: 'center', color: '#ffffff', padding: '20px' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '8px' }}>📄</div>
-                    <div style={{ fontSize: '15px', fontWeight: 600 }}>{selectedApp.documents[inspectDocType]!.filename}</div>
-                    <div style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 16px 0' }}>PDF Document</div>
-                    {selectedApp.documents[inspectDocType]!.dataUrl && (
-                      <a
-                        href={selectedApp.documents[inspectDocType]!.dataUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-primary"
-                        style={{ fontSize: '13px', padding: '8px 16px', textDecoration: 'none', display: 'inline-block' }}
-                      >
-                        Open PDF in New Tab ↗
-                      </a>
-                    )}
-                  </div>
-                ) : selectedApp.documents[inspectDocType]!.dataUrl ? (
-                  <img
-                    src={selectedApp.documents[inspectDocType]!.dataUrl}
-                    alt="Document preview"
-                    style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '4px' }}
-                  />
-                ) : (
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '40px', marginBottom: '8px' }}>📄</div>
-                    <div style={{ fontSize: '14px' }}>{selectedApp.documents[inspectDocType]!.filename}</div>
-                    <div style={{ fontSize: '12px', marginTop: '4px' }}>Binary Document</div>
-                  </div>
-                )}
-              </div>
-
-              {/* Review & Action Panel */}
-              <div>
-                <h4 style={{ fontSize: '14px', marginBottom: '8px' }}>Verification Checklist</h4>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '14px' }}>
-                  <div>• Name matches applicant: <strong>{selectedApp.legalName}</strong></div>
-                  <div>• Expiry Date entered: <strong>{selectedApp.documents[inspectDocType]!.expiryDate || 'N/A'}</strong></div>
-                  <div>• Document is clear, legible, and uncropped.</div>
-                </div>
-
-                {/* AI Extracted Data Card in Admin */}
-                {selectedApp.documents[inspectDocType]!.aiExtractedData && (
-                  <div
-                    style={{
-                      marginBottom: '16px',
-                      padding: '12px',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'rgba(16, 185, 129, 0.08)',
-                      border: '1px solid rgba(16, 185, 129, 0.35)',
-                    }}
-                  >
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--success)', marginBottom: '4px' }}>
-                      ✨ AI OCR Extracted Intelligence
-                    </div>
-                    {selectedApp.documents[inspectDocType]!.aiExtractedData!.summary && (
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                        {selectedApp.documents[inspectDocType]!.aiExtractedData!.summary}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '11px' }}>
-                      {selectedApp.documents[inspectDocType]!.aiExtractedData!.fullName && (
-                        <div>Holder: <strong>{selectedApp.documents[inspectDocType]!.aiExtractedData!.fullName}</strong></div>
-                      )}
-                      {selectedApp.documents[inspectDocType]!.aiExtractedData!.licenceNumber && (
-                        <div>Licence/Badge #: <strong>{selectedApp.documents[inspectDocType]!.aiExtractedData!.licenceNumber}</strong></div>
-                      )}
-                      {selectedApp.documents[inspectDocType]!.aiExtractedData!.vrm && (
-                        <div>VRM: <strong>{selectedApp.documents[inspectDocType]!.aiExtractedData!.vrm}</strong></div>
-                      )}
-                      {selectedApp.documents[inspectDocType]!.aiExtractedData!.expiryDate && (
-                        <div>AI Expiry: <strong style={{ color: 'var(--flame-600)' }}>{selectedApp.documents[inspectDocType]!.aiExtractedData!.expiryDate}</strong></div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                    Rejection Reason (if declining)
-                  </label>
-                  <select
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    style={{ fontSize: '12px', padding: '8px', marginBottom: '6px' }}
-                  >
-                    <option value="">Select predefined reason...</option>
-                    <option value="Document is blurry, unreadable, or truncated">Blurry / Unreadable</option>
-                    <option value="Document has expired or expiry date mismatch">Expired Document</option>
-                    <option value="Name or VRM does not match application details">Name / VRM Mismatch</option>
-                    <option value="Wrong document uploaded in this slot">Incorrect Document Type</option>
-                    <option value="Missing reverse side of photocard or licence">Missing Reverse Side</option>
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Or enter custom compliance note..."
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    style={{ fontSize: '12px', padding: '8px' }}
-                  />
-                </div>
-
-                {/* Approve / Reject Buttons */}
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    onClick={() => handleDocReview(inspectDocType, 'APPROVE')}
-                    disabled={actionLoading}
-                    className="btn-primary"
-                    style={{ flex: 1, background: 'var(--success)', padding: '10px' }}
-                  >
-                    ✓ Approve Document
-                  </button>
-
-                  <button
-                    onClick={() => handleDocReview(inspectDocType, 'REJECT', rejectReason)}
-                    disabled={actionLoading}
-                    style={{
-                      flex: 1,
-                      background: 'var(--danger-bg)',
-                      color: 'var(--danger)',
-                      border: '1px solid rgba(239, 68, 68, 0.4)',
-                      borderRadius: 'var(--radius-md)',
-                      fontWeight: 600,
-                      padding: '10px',
-                      fontSize: '13px',
-                    }}
-                  >
-                    ✕ Reject Document
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Universal Document Preview & AI Inspector Modal */}
+      <DocumentPreviewModal
+        isOpen={!!inspectDocType && !!selectedApp && !!selectedApp.documents[inspectDocType]}
+        onClose={() => setInspectDocType(null)}
+        doc={inspectDocType && selectedApp ? selectedApp.documents[inspectDocType] : null}
+        applicantName={selectedApp?.legalName}
+        isStaff={true}
+        onTriggerAiExtract={async (docType) => {
+          if (!selectedApp) return;
+          const doc = selectedApp.documents[docType];
+          if (!doc) return;
+          try {
+            const res = await fetch('/api/onboarding/ai-extract', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                appId: selectedApp.id,
+                docType,
+                filename: doc.filename,
+                dataUrl: doc.dataUrl,
+                currentAppData: {
+                  legalName: selectedApp.legalName,
+                  vrm: selectedApp.vrm,
+                  tflDriverBadgeNum: selectedApp.tflDriverBadgeNum,
+                  make: selectedApp.make,
+                },
+              }),
+            });
+            const data = await res.json();
+            if (res.ok && data.extractedData) {
+              const updatedDoc = {
+                ...doc,
+                aiExtractedData: data.extractedData,
+                isAnalyzing: false,
+              };
+              const updatedApp = {
+                ...selectedApp,
+                documents: {
+                  ...selectedApp.documents,
+                  [docType]: updatedDoc,
+                },
+              };
+              setSelectedApp(updatedApp);
+              setApplications((prev) => prev.map((a) => (a.id === selectedApp.id ? updatedApp : a)));
+            }
+          } catch (err) {
+            console.error('Staff re-extract error:', err);
+          }
+        }}
+        onApprove={async (docType) => {
+          await handleDocReview(docType, 'APPROVE');
+        }}
+        onReject={async (docType, reason) => {
+          await handleDocReview(docType, 'REJECT', reason);
+        }}
+      />
     </div>
   );
 }

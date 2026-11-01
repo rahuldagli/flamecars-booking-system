@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { DriverApplication, DocumentType, REQUIRED_DOCUMENTS_CONFIG, UploadedDoc } from '@/types/onboarding';
+import DocumentPreviewModal from '@/components/DocumentPreviewModal';
 
 interface Step3DocumentsProps {
   data: DriverApplication;
@@ -13,10 +14,11 @@ interface Step3DocumentsProps {
 export default function Step3Documents({ data, onChange, onNext, onBack }: Step3DocumentsProps) {
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<'all' | 'driver' | 'vehicle'>('all');
+  const [previewDocType, setPreviewDocType] = useState<DocumentType | null>(null);
 
   async function handleFileUpload(type: DocumentType, title: string, file: File, expiry?: string) {
-    if (file.size > 10 * 1024 * 1024) {
-      setError(`File "${file.name}" exceeds the 10 MB maximum limit.`);
+    if (file.size > 15 * 1024 * 1024) {
+      setError(`File "${file.name}" exceeds the 15 MB maximum limit.`);
       return;
     }
 
@@ -32,7 +34,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
         title,
         filename: file.name,
         fileSize: file.size,
-        mimeType: file.type,
+        mimeType: file.type || 'application/octet-stream',
         dataUrl,
         expiryDate: expiry || data.documents[type]?.expiryDate || '',
         status: 'PENDING',
@@ -49,12 +51,13 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
       });
       setError('');
 
-      // Trigger AI OCR Extraction API
+      // Trigger AI OCR Extraction API during file upload
       try {
         const res = await fetch('/api/onboarding/ai-extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            appId: data.id,
             docType: type,
             filename: file.name,
             dataUrl,
@@ -84,6 +87,9 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
               appFieldUpdates.tflDriverBadgeExpiry = detectedExpiry;
             }
           } else if (type === 'TFL_PHV_VEHICLE_LICENCE') {
+            if (aiData.vrm && !data.vrm) {
+              appFieldUpdates.vrm = aiData.vrm;
+            }
             if (aiData.licenceNumber && !data.tflPhvVehicleLicence) {
               appFieldUpdates.tflPhvVehicleLicence = aiData.licenceNumber;
             }
@@ -96,18 +102,30 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
             }
           }
 
-          onChange({
-            ...appFieldUpdates,
-            documents: {
-              ...data.documents,
-              [type]: {
-                ...initialDoc,
-                isAnalyzing: false,
-                expiryDate: detectedExpiry,
-                aiExtractedData: aiData,
-              },
+          const updatedDocuments = {
+            ...data.documents,
+            [type]: {
+              ...initialDoc,
+              isAnalyzing: false,
+              expiryDate: detectedExpiry,
+              aiExtractedData: aiData,
             },
-          });
+          };
+
+          const fullUpdatedApp = {
+            ...data,
+            ...appFieldUpdates,
+            documents: updatedDocuments,
+          };
+
+          onChange(fullUpdatedApp);
+
+          // Save directly to DB draft endpoint as well
+          fetch('/api/onboarding/draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fullUpdatedApp),
+          }).catch((err) => console.warn('Autosave to draft after OCR:', err));
         } else {
           // Finish analyzing state even if error
           onChange({
@@ -135,6 +153,80 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
     };
 
     reader.readAsDataURL(file);
+  }
+
+  // Trigger manual or on-open AI Extraction and persist to DB
+  async function handleTriggerAiExtract(type: DocumentType) {
+    const doc = data.documents[type];
+    if (!doc || !doc.dataUrl) return;
+
+    // Mark analyzing
+    const analyzingDoc = { ...doc, isAnalyzing: true };
+    onChange({
+      documents: {
+        ...data.documents,
+        [type]: analyzingDoc,
+      },
+    });
+
+    try {
+      const res = await fetch('/api/onboarding/ai-extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appId: data.id,
+          docType: type,
+          filename: doc.filename,
+          dataUrl: doc.dataUrl,
+          currentAppData: {
+            legalName: data.legalName,
+            vrm: data.vrm,
+            tflDriverBadgeNum: data.tflDriverBadgeNum,
+            make: data.make,
+          },
+        }),
+      });
+
+      const resJson = await res.json();
+      if (res.ok && resJson.extractedData) {
+        const aiData = resJson.extractedData;
+        const detectedExpiry = aiData.expiryDate || doc.expiryDate;
+
+        const updatedDoc = {
+          ...doc,
+          isAnalyzing: false,
+          expiryDate: detectedExpiry,
+          aiExtractedData: aiData,
+        };
+
+        const appUpdates: Partial<DriverApplication> = {
+          documents: {
+            ...data.documents,
+            [type]: updatedDoc,
+          },
+        };
+
+        if (type === 'TFL_PHV_DRIVER_BADGE_FRONT') {
+          if (aiData.licenceNumber && !data.tflDriverBadgeNum) appUpdates.tflDriverBadgeNum = aiData.licenceNumber;
+          if (detectedExpiry && !data.tflDriverBadgeExpiry) appUpdates.tflDriverBadgeExpiry = detectedExpiry;
+        } else if (type === 'TFL_PHV_VEHICLE_LICENCE') {
+          if (aiData.vrm && !data.vrm) appUpdates.vrm = aiData.vrm;
+          if (detectedExpiry && !data.tflPhvVehicleExpiry) appUpdates.tflPhvVehicleExpiry = detectedExpiry;
+        }
+
+        const fullUpdated = { ...data, ...appUpdates };
+        onChange(fullUpdated);
+
+        // Save to DB
+        fetch('/api/onboarding/draft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fullUpdated),
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Trigger AI Extraction error:', e);
+    }
   }
 
   function handleExpiryChange(type: DocumentType, expiry: string) {
@@ -184,7 +276,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
         <div>
           <h2 style={{ fontSize: '22px', marginBottom: '6px' }}>3. Document Uploads & AI OCR</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-            Upload clear photographs or PDF documents. Our AI scanner automatically extracts and validates licence numbers and expiry dates.
+            Upload your documents (PDF, Word, Excel, CSV, or high-res photos). Our AI engine automatically extracts and validates licence numbers, VRMs, and expiry dates.
           </p>
         </div>
 
@@ -231,7 +323,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
             border: activeCategory === 'driver' ? '1px solid var(--flame-500)' : '1px solid var(--border-medium)',
           }}
         >
-          Driver Documents
+          Driver Documents ({REQUIRED_DOCUMENTS_CONFIG.filter((c) => c.category === 'driver' && data.documents[c.type]).length}/4)
         </button>
         <button
           type="button"
@@ -245,7 +337,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
             border: activeCategory === 'vehicle' ? '1px solid var(--flame-500)' : '1px solid var(--border-medium)',
           }}
         >
-          Vehicle Documents
+          Vehicle Documents ({REQUIRED_DOCUMENTS_CONFIG.filter((c) => c.category === 'vehicle' && data.documents[c.type]).length}/4)
         </button>
       </div>
 
@@ -265,36 +357,41 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
         </div>
       )}
 
-      {/* Documents Grid */}
+      {/* Document Upload Cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '28px' }}>
         {filteredDocs.map((config) => {
           const doc = data.documents[config.type];
           const isUploaded = !!doc;
           const aiData = doc?.aiExtractedData;
+          const isPdf = doc?.mimeType?.includes('pdf') || doc?.filename?.toLowerCase().endsWith('.pdf');
+          const isWord = doc?.mimeType?.includes('word') || /\.(docx|doc)$/i.test(doc?.filename || '');
+          const isSheet = doc?.mimeType?.includes('sheet') || doc?.mimeType?.includes('csv') || /\.(xlsx|xls|csv)$/i.test(doc?.filename || '');
 
           return (
             <div
               key={config.type}
               style={{
-                padding: '18px',
+                padding: '18px 20px',
                 borderRadius: 'var(--radius-md)',
-                background: isUploaded ? 'rgba(5, 150, 105, 0.04)' : '#ffffff',
-                border: isUploaded ? '1px solid rgba(5, 150, 105, 0.35)' : '1px solid var(--border-medium)',
+                background: '#ffffff',
+                border: isUploaded ? '1px solid var(--border-medium)' : '1px dashed var(--border-medium)',
                 boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
                 transition: 'all 0.2s ease',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <h4 style={{ fontSize: '15px' }}>{config.title}</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h4 style={{ fontSize: '15px', fontWeight: 700 }}>{config.title}</h4>
                     {config.isMandatory ? (
-                      <span style={{ fontSize: '11px', color: 'var(--flame-500)', fontWeight: 700 }}>REQUIRED</span>
+                      <span className="badge badge-action" style={{ fontSize: '10px', padding: '2px 6px' }}>Mandatory</span>
                     ) : (
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>OPTIONAL</span>
+                      <span className="badge badge-draft" style={{ fontSize: '10px', padding: '2px 6px' }}>Optional</span>
                     )}
                   </div>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{config.description}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', maxWidth: '580px' }}>
+                    {config.description}
+                  </p>
                 </div>
 
                 <div>
@@ -315,8 +412,12 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                 {isUploaded ? (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        {doc.mimeType?.includes('pdf') || doc.filename?.toLowerCase().endsWith('.pdf') ? (
+                      <div
+                        onClick={() => setPreviewDocType(config.type)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
+                        title="Click to preview inside popup window"
+                      >
+                        {isPdf ? (
                           <div
                             style={{
                               width: '56px',
@@ -337,6 +438,48 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                             <span style={{ fontSize: '20px', lineHeight: 1 }}>📄</span>
                             <span style={{ marginTop: '2px' }}>PDF</span>
                           </div>
+                        ) : isWord ? (
+                          <div
+                            style={{
+                              width: '56px',
+                              height: '56px',
+                              borderRadius: '8px',
+                              background: '#e0e7ff',
+                              border: '1px solid #c7d2fe',
+                              color: '#4338ca',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 700,
+                              fontSize: '11px',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <span style={{ fontSize: '20px', lineHeight: 1 }}>📝</span>
+                            <span style={{ marginTop: '2px' }}>WORD</span>
+                          </div>
+                        ) : isSheet ? (
+                          <div
+                            style={{
+                              width: '56px',
+                              height: '56px',
+                              borderRadius: '8px',
+                              background: '#dcfce7',
+                              border: '1px solid #86efac',
+                              color: '#15803d',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 700,
+                              fontSize: '11px',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <span style={{ fontSize: '20px', lineHeight: 1 }}>📊</span>
+                            <span style={{ marginTop: '2px' }}>SHEET</span>
+                          </div>
                         ) : doc.dataUrl ? (
                           <img
                             src={doc.dataUrl}
@@ -352,7 +495,9 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                           />
                         ) : null}
                         <div>
-                          <div style={{ fontSize: '13px', fontWeight: 600 }}>{doc.filename}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--flame-600)' }}>
+                            {doc.filename} <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>🔍 Preview</span>
+                          </div>
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                             {(doc.fileSize / 1024).toFixed(1)} KB • Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
                           </div>
@@ -371,6 +516,15 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                             />
                           </div>
                         )}
+
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDocType(config.type)}
+                          className="btn-secondary"
+                          style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600 }}
+                        >
+                          👁️ Inspect / Preview
+                        </button>
 
                         <button
                           type="button"
@@ -406,7 +560,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                         }}
                       >
                         <span className="animate-pulse-glow" style={{ fontSize: '16px' }}>🤖</span>
-                        <span><strong>AI Document OCR Scanner:</strong> Reading text, licence numbers, and expiration dates...</span>
+                        <span><strong>AI Engine:</strong> Extracting text contents, licence numbers, and regulatory dates...</span>
                       </div>
                     ) : aiData ? (
                       <div
@@ -423,7 +577,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                             <span>✨</span> AI Document Extraction Verified
                             <span style={{ fontSize: '10px', opacity: 0.8 }}>({Math.round((aiData.confidence || 0.95) * 100)}% Match)</span>
                           </div>
-                          <span style={{ fontSize: '11px', color: 'var(--success)' }}>✓ Saved to Application</span>
+                          <span style={{ fontSize: '11px', color: 'var(--success)' }}>✓ Saved to Database</span>
                         </div>
 
                         {aiData.summary && (
@@ -465,7 +619,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      Accepted formats: JPG, PNG, HEIC, PDF (Max 10 MB) • <span style={{ color: 'var(--flame-400)' }}>✨ AI Auto-Extract</span>
+                      Accepted formats: PDF, Images (JPG, PNG), Word (.docx), Sheets (.xlsx, .csv) • Max 15 MB • <span style={{ color: 'var(--flame-400)' }}>✨ AI Auto-Extract</span>
                     </div>
 
                     <label
@@ -477,10 +631,10 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                         borderColor: 'var(--flame-500)',
                       }}
                     >
-                      <span>📷</span> Choose File / Take Photo
+                      <span>📎</span> Choose File (PDF, Sheet, Word, Image)
                       <input
                         type="file"
-                        accept="image/*,application/pdf"
+                        accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain"
                         capture="environment"
                         style={{ display: 'none' }}
                         onChange={(e) => {
@@ -521,6 +675,16 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
           </button>
         </div>
       </div>
+
+      {/* Interactive Document Preview Popup Window for Driver */}
+      <DocumentPreviewModal
+        isOpen={!!previewDocType}
+        onClose={() => setPreviewDocType(null)}
+        doc={previewDocType ? data.documents[previewDocType] : null}
+        applicantName={data.legalName}
+        isStaff={false}
+        onTriggerAiExtract={handleTriggerAiExtract}
+      />
     </div>
   );
 }

@@ -43,7 +43,12 @@ export interface UploadedDoc {
     vehicleModel?: string;
     policyNumber?: string;
     summary?: string;
-    [key: string]: string | number | undefined;
+    rawTextContent?: string;
+    documentTypeDetected?: string;
+    extractedAt?: string;
+    keyFields?: Record<string, string>;
+    tableData?: { headers: string[]; rows: string[][] };
+    [key: string]: string | number | undefined | Record<string, string> | { headers: string[]; rows: string[][] };
   };
 }
 
