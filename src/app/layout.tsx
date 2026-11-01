@@ -43,7 +43,7 @@ export default function RootLayout({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+              <a href="/?home=1" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
                 <div
                   style={{
                     width: '38px',
@@ -66,7 +66,7 @@ export default function RootLayout({
                     DRIVER ONBOARDING
                   </div>
                 </div>
-              </Link>
+              </a>
             </div>
 
             <nav style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

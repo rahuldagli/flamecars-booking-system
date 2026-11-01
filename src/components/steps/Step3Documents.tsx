@@ -476,13 +476,28 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
       </div>
 
       {/* Navigation Buttons */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         <button type="button" onClick={onBack} className="btn-secondary">
-          &larr; Back to Vehicle
+          ← Back to Vehicle
         </button>
-        <button type="button" onClick={handleContinue} className="btn-primary">
-          Continue to Bank Details &rarr;
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={onNext}
+            style={{
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            Skip to Bank Details →
+          </button>
+          <button type="button" onClick={handleContinue} className="btn-primary">
+            Continue to Bank Details →
+          </button>
+        </div>
       </div>
     </div>
   );

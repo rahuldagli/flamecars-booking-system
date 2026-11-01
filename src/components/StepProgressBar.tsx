@@ -64,14 +64,15 @@ export default function StepProgressBar({ currentStep, onStepClick }: StepProgre
             <div
               key={step}
               onClick={() => {
-                if (isDone && onStepClick) onStepClick(step);
+                if (onStepClick) onStepClick(step);
               }}
+              title={`Go to step ${step}: ${title}`}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 zIndex: 2,
-                cursor: isDone ? 'pointer' : 'default',
+                cursor: 'pointer',
               }}
             >
               <div

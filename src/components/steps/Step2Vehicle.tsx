@@ -225,13 +225,28 @@ export default function Step2Vehicle({ data, onChange, onNext, onBack }: Step2Ve
       </div>
 
       {/* Navigation Buttons */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         <button type="button" onClick={onBack} className="btn-secondary">
-          &larr; Back to Identity
+          ← Back to Identity
         </button>
-        <button type="button" onClick={handleContinue} className="btn-primary">
-          Continue to Documents &rarr;
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={onNext}
+            style={{
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            Skip to Documents →
+          </button>
+          <button type="button" onClick={handleContinue} className="btn-primary">
+            Continue to Documents →
+          </button>
+        </div>
       </div>
     </div>
   );

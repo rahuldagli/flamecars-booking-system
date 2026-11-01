@@ -189,13 +189,28 @@ export default function Step1Identity({ data, onChange, onNext, onBack }: Step1I
       </div>
 
       {/* Navigation Buttons */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         <button type="button" onClick={onBack} className="btn-secondary">
-          &larr; Back to Overview
+          ← Back to Overview
         </button>
-        <button type="button" onClick={handleContinue} className="btn-primary">
-          Continue to Vehicle &rarr;
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={onNext}
+            style={{
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            Skip to Vehicle →
+          </button>
+          <button type="button" onClick={handleContinue} className="btn-primary">
+            Continue to Vehicle →
+          </button>
+        </div>
       </div>
     </div>
   );

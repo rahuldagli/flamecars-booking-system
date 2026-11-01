@@ -21,8 +21,17 @@ export default function OnboardingPage() {
 
   // Hydrate from localStorage on client mount
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const isHome = params.get('home') === '1';
     const saved = loadLocalDraft();
-    if (saved && saved.legalName) {
+
+    if (isHome) {
+      if (saved) {
+        setApp({ ...saved, currentStep: 0 });
+      } else {
+        setApp({ ...INITIAL_APPLICATION, currentStep: 0 });
+      }
+    } else if (saved && saved.legalName) {
       setApp(saved);
     }
     setIsHydrated(true);
@@ -110,6 +119,9 @@ export default function OnboardingPage() {
         <Step0Landing
           onStart={() => updateApp({ currentStep: 1 })}
           onResumeClick={() => setIsResumeModalOpen(true)}
+          hasDraft={!!(app.legalName || app.mobileNumber)}
+          draftName={app.legalName}
+          onResumeDraft={() => updateApp({ currentStep: 1 })}
         />
       )}
 

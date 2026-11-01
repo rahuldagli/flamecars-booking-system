@@ -161,13 +161,28 @@ export default function Step4BankDetails({ data, onChange, onNext, onBack }: Ste
       </div>
 
       {/* Navigation Buttons */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         <button type="button" onClick={onBack} className="btn-secondary">
-          &larr; Back to Documents
+          ← Back to Documents
         </button>
-        <button type="button" onClick={handleContinue} className="btn-primary">
-          Continue to Agreement &rarr;
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={onNext}
+            style={{
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            Skip to Agreement →
+          </button>
+          <button type="button" onClick={handleContinue} className="btn-primary">
+            Continue to Agreement →
+          </button>
+        </div>
       </div>
     </div>
   );

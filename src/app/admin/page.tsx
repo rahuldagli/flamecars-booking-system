@@ -431,44 +431,9 @@ export default function AdminDashboardPage() {
               className="btn-primary"
               style={{ width: '100%', padding: '14px', fontSize: '15px' }}
             >
-              {loginLoading ? 'Signing In...' : 'Sign In to Staff Portal &rarr;'}
+              {loginLoading ? 'Signing In...' : 'Sign In to Staff Portal →'}
             </button>
           </form>
-
-          {/* Quick Demo Helper Box */}
-          <div
-            style={{
-              marginTop: '24px',
-              padding: '12px 14px',
-              borderRadius: 'var(--radius-sm)',
-              background: 'rgba(245, 158, 11, 0.08)',
-              border: '1px dashed rgba(245, 158, 11, 0.35)',
-              fontSize: '12px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontWeight: 700, color: 'var(--flame-400)' }}>🔑 Configured Credentials (.env.local)</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginEmail('admin@flamecars.co.uk');
-                  setLoginPassword('FlameCars#Admin2026!Sec');
-                }}
-                style={{
-                  background: 'transparent',
-                  color: 'var(--flame-400)',
-                  textDecoration: 'underline',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                }}
-              >
-                Auto-fill
-              </button>
-            </div>
-            <div>Email: <strong style={{ color: 'var(--text-primary)' }}>admin@flamecars.co.uk</strong></div>
-            <div>Password: <strong style={{ color: 'var(--text-primary)' }}>FlameCars#Admin2026!Sec</strong></div>
-          </div>
         </div>
       </div>
     );

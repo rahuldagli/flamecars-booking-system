@@ -142,7 +142,7 @@ export default function Step5Review({
 
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
           <a href="/admin" className="btn-secondary" style={{ textDecoration: 'none' }}>
-            View in Staff Portal &rarr;
+            View in Staff Portal →
           </a>
         </div>
       </div>
@@ -363,7 +363,7 @@ export default function Step5Review({
       {/* Action Buttons */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button type="button" onClick={onBack} className="btn-secondary">
-          &larr; Back to Agreement
+          ← Back to Agreement
         </button>
         <button
           type="button"

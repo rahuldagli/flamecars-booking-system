@@ -258,13 +258,28 @@ export default function Step4Agreement({ data, onChange, onNext, onBack }: Step4
       </div>
 
       {/* Navigation Buttons */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         <button type="button" onClick={onBack} className="btn-secondary">
-          &larr; Back to Bank Details
+          ← Back to Bank Details
         </button>
-        <button type="button" onClick={handleContinue} className="btn-primary">
-          Review & Submit &rarr;
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={onNext}
+            style={{
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            Skip to Review →
+          </button>
+          <button type="button" onClick={handleContinue} className="btn-primary">
+            Review & Submit →
+          </button>
+        </div>
       </div>
     </div>
   );

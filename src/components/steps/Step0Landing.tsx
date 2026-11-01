@@ -3,11 +3,57 @@
 interface Step0LandingProps {
   onStart: () => void;
   onResumeClick: () => void;
+  hasDraft?: boolean;
+  draftName?: string;
+  onResumeDraft?: () => void;
 }
 
-export default function Step0Landing({ onStart, onResumeClick }: Step0LandingProps) {
+export default function Step0Landing({
+  onStart,
+  onResumeClick,
+  hasDraft,
+  draftName,
+  onResumeDraft,
+}: Step0LandingProps) {
   return (
     <div className="animate-fade-in" style={{ padding: '10px 0' }}>
+      {/* Draft in Progress Banner */}
+      {hasDraft && onResumeDraft && (
+        <div
+          style={{
+            maxWidth: '680px',
+            margin: '0 auto 24px auto',
+            padding: '16px 20px',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--flame-50)',
+            border: '1px solid var(--border-flame)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            boxShadow: '0 2px 8px rgba(234, 88, 12, 0.1)',
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 700, color: 'var(--flame-600)', fontSize: '14px' }}>
+              📝 Saved Application Found: {draftName || 'In Progress'}
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Pick up right where you left off, or start a new application below.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onResumeDraft}
+            className="btn-primary"
+            style={{ padding: '8px 18px', fontSize: '13px' }}
+          >
+            Resume Application →
+          </button>
+        </div>
+      )}
+
       {/* Hero Badge */}
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
         <div
@@ -133,7 +179,7 @@ export default function Step0Landing({ onStart, onResumeClick }: Step0LandingPro
           className="btn-primary"
           style={{ width: '100%', maxWidth: '380px', padding: '16px' }}
         >
-          Start Driver Registration &rarr;
+          Start Driver Registration →
         </button>
 
         <button
