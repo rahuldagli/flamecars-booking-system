@@ -14,6 +14,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Vehicle details are incomplete' }, { status: 400 });
     }
 
+    if (!application.bankAccountName || !application.bankAccountNumber || !application.bankSortCode) {
+      return NextResponse.json({ error: 'Bank account details are required for driver fare disbursements' }, { status: 400 });
+    }
+
     if (!application.termsAccepted) {
       return NextResponse.json({ error: 'You must accept the independent driver agreement' }, { status: 400 });
     }

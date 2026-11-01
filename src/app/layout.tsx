@@ -123,10 +123,10 @@ export default function RootLayout({
         >
           <div className="container" style={{ textAlign: 'center' }}>
             <p style={{ marginBottom: '8px', color: 'var(--text-secondary)' }}>
-              <strong>Flame Cars</strong> &bull; Licensed London Private Hire Operator (TfL)
+              <strong>Flame Cars</strong> • Licensed London Private Hire Operator (TfL)
             </p>
             <p style={{ marginBottom: '6px' }}>
-              112 College Road, Harrow Weald, Harrow, England, HA3 6EB &bull; Telephone: <a href="tel:02034008257">020 3400 8257</a> &bull; Support: <a href="mailto:support@flamecars.co.uk">support@flamecars.co.uk</a>
+              112 College Road, Harrow Weald, Harrow, England, HA3 6EB • Telephone: <a href="tel:02034008257">020 3400 8257</a> • Support: <a href="mailto:support@flamecars.co.uk">support@flamecars.co.uk</a>
             </p>
             <p style={{ fontSize: '11px', marginTop: '12px', color: 'var(--text-muted)' }}>
               &copy; {new Date().getFullYear()} Flame Cars. All applicant data is processed securely under UK GDPR and TfL regulatory retention standards.

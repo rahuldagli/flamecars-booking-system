@@ -489,7 +489,7 @@ export default function AdminDashboardPage() {
         <div>
           <h1 style={{ fontSize: '26px', marginBottom: '4px' }}>Compliance & Onboarding Dashboard</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-            Flame Cars Operator Internal Review &bull; TBMS Dispatch Adapter
+            Flame Cars Operator Internal Review • TBMS Dispatch Adapter
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -622,7 +622,7 @@ export default function AdminDashboardPage() {
                     </div>
 
                     <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                      Badge: {app.tflDriverBadgeNum || 'N/A'} &bull; Tel: {app.mobileNumber || 'N/A'}
+                      Badge: {app.tflDriverBadgeNum || 'N/A'} • Tel: {app.mobileNumber || 'N/A'}
                     </div>
                   </div>
                 );
@@ -644,7 +644,7 @@ export default function AdminDashboardPage() {
                   </span>
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  Reference: <strong>{selectedApp.referenceNumber}</strong> &bull; Submitted: {selectedApp.submittedAt ? new Date(selectedApp.submittedAt).toLocaleDateString() : 'Draft'}
+                  Reference: <strong>{selectedApp.referenceNumber}</strong> • Submitted: {selectedApp.submittedAt ? new Date(selectedApp.submittedAt).toLocaleDateString() : 'Draft'}
                 </div>
               </div>
 
@@ -722,7 +722,7 @@ export default function AdminDashboardPage() {
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                           {doc ? (
                             <>
-                              File: {doc.filename} &bull; Expiry:{' '}
+                              File: {doc.filename} • Expiry:{' '}
                               <strong style={{ color: doc.expiryDate ? 'var(--text-primary)' : 'var(--warning)' }}>
                                 {doc.expiryDate || 'Not specified'}
                               </strong>
@@ -831,7 +831,25 @@ export default function AdminDashboardPage() {
                   border: '1px solid var(--border-medium)',
                 }}
               >
-                {selectedApp.documents[inspectDocType]!.dataUrl ? (
+                {selectedApp.documents[inspectDocType]!.mimeType?.includes('pdf') ||
+                selectedApp.documents[inspectDocType]!.filename?.toLowerCase().endsWith('.pdf') ? (
+                  <div style={{ textAlign: 'center', color: '#ffffff', padding: '20px' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '8px' }}>📄</div>
+                    <div style={{ fontSize: '15px', fontWeight: 600 }}>{selectedApp.documents[inspectDocType]!.filename}</div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 16px 0' }}>PDF Document</div>
+                    {selectedApp.documents[inspectDocType]!.dataUrl && (
+                      <a
+                        href={selectedApp.documents[inspectDocType]!.dataUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-primary"
+                        style={{ fontSize: '13px', padding: '8px 16px', textDecoration: 'none', display: 'inline-block' }}
+                      >
+                        Open PDF in New Tab ↗
+                      </a>
+                    )}
+                  </div>
+                ) : selectedApp.documents[inspectDocType]!.dataUrl ? (
                   <img
                     src={selectedApp.documents[inspectDocType]!.dataUrl}
                     alt="Document preview"
@@ -841,7 +859,7 @@ export default function AdminDashboardPage() {
                   <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                     <div style={{ fontSize: '40px', marginBottom: '8px' }}>📄</div>
                     <div style={{ fontSize: '14px' }}>{selectedApp.documents[inspectDocType]!.filename}</div>
-                    <div style={{ fontSize: '12px', marginTop: '4px' }}>Binary PDF Document</div>
+                    <div style={{ fontSize: '12px', marginTop: '4px' }}>Binary Document</div>
                   </div>
                 )}
               </div>
@@ -850,9 +868,9 @@ export default function AdminDashboardPage() {
               <div>
                 <h4 style={{ fontSize: '14px', marginBottom: '8px' }}>Verification Checklist</h4>
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '14px' }}>
-                  <div>&bull; Name matches applicant: <strong>{selectedApp.legalName}</strong></div>
-                  <div>&bull; Expiry Date entered: <strong>{selectedApp.documents[inspectDocType]!.expiryDate || 'N/A'}</strong></div>
-                  <div>&bull; Document is clear, legible, and uncropped.</div>
+                  <div>• Name matches applicant: <strong>{selectedApp.legalName}</strong></div>
+                  <div>• Expiry Date entered: <strong>{selectedApp.documents[inspectDocType]!.expiryDate || 'N/A'}</strong></div>
+                  <div>• Document is clear, legible, and uncropped.</div>
                 </div>
 
                 {/* AI Extracted Data Card in Admin */}

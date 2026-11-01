@@ -19,12 +19,13 @@ if (!global.__flamecars_otps) {
 export const applicationStore = {
   get(idOrMobileOrRef: string): DriverApplication | undefined {
     const apps = Array.from(global.__flamecars_applications!.values());
-    return apps.find(
-      (a) =>
-        a.id === idOrMobileOrRef ||
-        a.mobileNumber === idOrMobileOrRef ||
-        a.referenceNumber === idOrMobileOrRef
-    );
+    const targetClean = idOrMobileOrRef.replace(/\s+/g, '').toLowerCase();
+    return apps.find((a) => {
+      const aId = (a.id || '').toLowerCase();
+      const aMobile = (a.mobileNumber || '').replace(/\s+/g, '').toLowerCase();
+      const aRef = (a.referenceNumber || '').toLowerCase();
+      return aId === targetClean || aMobile === targetClean || aRef === targetClean;
+    });
   },
 
   getAll(): DriverApplication[] {

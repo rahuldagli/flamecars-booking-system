@@ -316,7 +316,28 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        {doc.dataUrl && (
+                        {doc.mimeType?.includes('pdf') || doc.filename?.toLowerCase().endsWith('.pdf') ? (
+                          <div
+                            style={{
+                              width: '56px',
+                              height: '56px',
+                              borderRadius: '8px',
+                              background: 'rgba(239, 68, 68, 0.08)',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              color: '#dc2626',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 700,
+                              fontSize: '11px',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <span style={{ fontSize: '20px', lineHeight: 1 }}>📄</span>
+                            <span style={{ marginTop: '2px' }}>PDF</span>
+                          </div>
+                        ) : doc.dataUrl ? (
                           <img
                             src={doc.dataUrl}
                             alt={doc.filename}
@@ -326,13 +347,14 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                               objectFit: 'cover',
                               borderRadius: '8px',
                               border: '1px solid var(--border-medium)',
+                              flexShrink: 0,
                             }}
                           />
-                        )}
+                        ) : null}
                         <div>
                           <div style={{ fontSize: '13px', fontWeight: 600 }}>{doc.filename}</div>
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            {(doc.fileSize / 1024).toFixed(1)} KB &bull; Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
+                            {(doc.fileSize / 1024).toFixed(1)} KB • Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
                           </div>
                         </div>
                       </div>
@@ -443,7 +465,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      Accepted formats: JPG, PNG, HEIC, PDF (Max 10 MB) &bull; <span style={{ color: 'var(--flame-400)' }}>✨ AI Auto-Extract</span>
+                      Accepted formats: JPG, PNG, HEIC, PDF (Max 10 MB) • <span style={{ color: 'var(--flame-400)' }}>✨ AI Auto-Extract</span>
                     </div>
 
                     <label

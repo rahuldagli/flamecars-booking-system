@@ -38,22 +38,29 @@ export default function OnboardingPage() {
     setIsHydrated(true);
   }, []);
 
-  // Autosave draft on change
+  const draftTimerRef = useState<{ timer: NodeJS.Timeout | null }>({ timer: null })[0];
+
+  // Autosave draft on change with debounced server sync
   function updateApp(updates: Partial<DriverApplication>) {
     setApp((prev) => {
       const next = { ...prev, ...updates, updatedAt: new Date().toISOString() };
       saveLocalDraft(next);
 
-      // Async background server sync if mobile number exists
+      // Async background server sync (debounced 800ms) if mobile number exists
       if (next.mobileNumber) {
         setSaveStatus('Saving draft...');
-        fetch('/api/onboarding/draft', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(next),
-        })
-          .then(() => setSaveStatus('Draft saved'))
-          .catch(() => setSaveStatus(''));
+        if (draftTimerRef.timer) {
+          clearTimeout(draftTimerRef.timer);
+        }
+        draftTimerRef.timer = setTimeout(() => {
+          fetch('/api/onboarding/draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(next),
+          })
+            .then(() => setSaveStatus('Draft saved'))
+            .catch(() => setSaveStatus(''));
+        }, 800);
       }
       return next;
     });
