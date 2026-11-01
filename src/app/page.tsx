@@ -31,6 +31,7 @@ export default function OnboardingPage() {
       } else {
         setApp({ ...INITIAL_APPLICATION, currentStep: 0 });
       }
+      window.history.replaceState({}, '', '/');
     } else if (saved && saved.legalName) {
       setApp(saved);
     }
