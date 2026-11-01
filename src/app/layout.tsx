@@ -25,10 +25,11 @@ export default function RootLayout({
             position: 'sticky',
             top: 0,
             zIndex: 50,
-            background: 'rgba(9, 11, 17, 0.85)',
+            background: 'rgba(255, 255, 255, 0.94)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
             borderBottom: '1px solid var(--border-subtle)',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
           }}
         >
           <div
@@ -58,10 +59,10 @@ export default function RootLayout({
                   <span style={{ fontSize: '20px', lineHeight: 1 }}>🔥</span>
                 </div>
                 <div>
-                  <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: '18px', letterSpacing: '-0.02em', color: '#fff' }}>
+                  <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: '18px', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
                     FLAME <span style={{ color: 'var(--flame-500)' }}>CARS</span>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.05em' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em' }}>
                     DRIVER ONBOARDING
                   </div>
                 </div>
@@ -95,8 +96,9 @@ export default function RootLayout({
                   color: 'var(--text-secondary)',
                   padding: '7px 14px',
                   borderRadius: 'var(--radius-sm)',
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid var(--border-subtle)',
+                  background: '#ffffff',
+                  border: '1px solid var(--border-medium)',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
                   textDecoration: 'none',
                 }}
               >
@@ -113,7 +115,7 @@ export default function RootLayout({
         <footer
           style={{
             borderTop: '1px solid var(--border-subtle)',
-            background: 'var(--bg-secondary)',
+            background: '#ffffff',
             padding: '30px 0',
             fontSize: '13px',
             color: 'var(--text-muted)',

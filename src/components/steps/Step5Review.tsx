@@ -91,8 +91,9 @@ export default function Step5Review({
             margin: '0 auto 28px auto',
             padding: '16px',
             borderRadius: 'var(--radius-md)',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-flame)',
+            background: '#ffffff',
+            border: '2px solid var(--flame-500)',
+            boxShadow: '0 2px 10px rgba(234, 88, 12, 0.15)',
           }}
         >
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>
@@ -104,7 +105,7 @@ export default function Step5Review({
               fontSize: '22px',
               fontWeight: 800,
               letterSpacing: '2px',
-              color: 'var(--flame-400)',
+              color: 'var(--flame-600)',
             }}
           >
             {submittedRef}
@@ -119,13 +120,13 @@ export default function Step5Review({
             textAlign: 'left',
             padding: '18px',
             borderRadius: 'var(--radius-sm)',
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid var(--border-subtle)',
+            background: 'var(--bg-tertiary)',
+            border: '1px solid var(--border-medium)',
             fontSize: '13px',
             lineHeight: 1.6,
           }}
         >
-          <h4 style={{ fontSize: '14px', marginBottom: '8px', color: '#fff' }}>What Happens Next:</h4>
+          <h4 style={{ fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>What Happens Next:</h4>
           <ol style={{ paddingLeft: '20px', color: 'var(--text-secondary)' }}>
             <li style={{ marginBottom: '6px' }}>
               <strong>TfL Register Verification:</strong> Our compliance officer will cross-check your badge and vehicle licence details with Transport for London.
@@ -151,7 +152,7 @@ export default function Step5Review({
   return (
     <div className="glass-panel animate-fade-in" style={{ padding: '28px' }}>
       <div style={{ marginBottom: '22px' }}>
-        <h2 style={{ fontSize: '22px', marginBottom: '6px' }}>5. Review & Submit Application</h2>
+        <h2 style={{ fontSize: '22px', marginBottom: '6px' }}>6. Review & Submit Application</h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
           Please verify your details before submitting your onboarding application for compliance review.
         </p>
@@ -166,7 +167,7 @@ export default function Step5Review({
             color: 'var(--danger)',
             fontSize: '13px',
             marginBottom: '20px',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
+            border: '1px solid rgba(220, 38, 38, 0.25)',
           }}
         >
           {error}
@@ -178,8 +179,9 @@ export default function Step5Review({
         style={{
           padding: '16px',
           borderRadius: 'var(--radius-sm)',
-          background: 'var(--bg-tertiary)',
-          border: '1px solid var(--border-subtle)',
+          background: '#ffffff',
+          border: '1px solid var(--border-medium)',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
           marginBottom: '16px',
         }}
       >
@@ -188,7 +190,7 @@ export default function Step5Review({
           <button
             type="button"
             onClick={() => onEditStep(1)}
-            style={{ background: 'transparent', color: 'var(--flame-400)', fontSize: '13px', fontWeight: 600 }}
+            style={{ background: 'transparent', color: 'var(--flame-600)', fontSize: '13px', fontWeight: 600 }}
           >
             Edit
           </button>
@@ -198,6 +200,7 @@ export default function Step5Review({
           <div><span style={{ color: 'var(--text-muted)' }}>Mobile:</span> <strong>{data.mobileNumber}</strong></div>
           <div><span style={{ color: 'var(--text-muted)' }}>Email:</span> <strong>{data.email}</strong></div>
           <div><span style={{ color: 'var(--text-muted)' }}>Address:</span> {data.residentialAddress}, {data.postcode}</div>
+          <div><span style={{ color: 'var(--text-muted)' }}>NI Number:</span> <strong>{data.nationalInsuranceNumber || 'N/A'}</strong></div>
           <div><span style={{ color: 'var(--text-muted)' }}>TfL Badge:</span> <strong>{data.tflDriverBadgeNum}</strong></div>
           <div><span style={{ color: 'var(--text-muted)' }}>Badge Expiry:</span> {data.tflDriverBadgeExpiry}</div>
         </div>
@@ -208,8 +211,9 @@ export default function Step5Review({
         style={{
           padding: '16px',
           borderRadius: 'var(--radius-sm)',
-          background: 'var(--bg-tertiary)',
-          border: '1px solid var(--border-subtle)',
+          background: '#ffffff',
+          border: '1px solid var(--border-medium)',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
           marginBottom: '16px',
         }}
       >
@@ -218,7 +222,7 @@ export default function Step5Review({
           <button
             type="button"
             onClick={() => onEditStep(2)}
-            style={{ background: 'transparent', color: 'var(--flame-400)', fontSize: '13px', fontWeight: 600 }}
+            style={{ background: 'transparent', color: 'var(--flame-600)', fontSize: '13px', fontWeight: 600 }}
           >
             Edit
           </button>
@@ -226,10 +230,9 @@ export default function Step5Review({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', fontSize: '13px' }}>
           <div><span style={{ color: 'var(--text-muted)' }}>VRM:</span> <strong>{data.vrm}</strong></div>
           <div><span style={{ color: 'var(--text-muted)' }}>Vehicle:</span> {data.make} {data.model} ({data.colour})</div>
-          <div><span style={{ color: 'var(--text-muted)' }}>Category:</span> {data.vehicleCategory}</div>
-          <div><span style={{ color: 'var(--text-muted)' }}>Seats:</span> {data.passengerSeats} Passenger Seats</div>
-          <div><span style={{ color: 'var(--text-muted)' }}>TfL PHV Licence:</span> <strong>{data.tflPhvVehicleLicence}</strong></div>
-          <div><span style={{ color: 'var(--text-muted)' }}>PHV Expiry:</span> {data.tflPhvVehicleExpiry}</div>
+          <div><span style={{ color: 'var(--text-muted)' }}>Category:</span> <strong>{data.vehicleCategory}</strong></div>
+          <div><span style={{ color: 'var(--text-muted)' }}>Capacity:</span> {data.passengerSeats} Passenger Seats</div>
+          <div><span style={{ color: 'var(--text-muted)' }}>Licence Expiry:</span> {data.tflPhvVehicleExpiry || 'Uploaded in docs'}</div>
         </div>
       </div>
 
@@ -238,8 +241,9 @@ export default function Step5Review({
         style={{
           padding: '16px',
           borderRadius: 'var(--radius-sm)',
-          background: 'var(--bg-tertiary)',
-          border: '1px solid var(--border-subtle)',
+          background: '#ffffff',
+          border: '1px solid var(--border-medium)',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
           marginBottom: '16px',
         }}
       >
@@ -248,7 +252,7 @@ export default function Step5Review({
           <button
             type="button"
             onClick={() => onEditStep(3)}
-            style={{ background: 'transparent', color: 'var(--flame-400)', fontSize: '13px', fontWeight: 600 }}
+            style={{ background: 'transparent', color: 'var(--flame-600)', fontSize: '13px', fontWeight: 600 }}
           >
             Edit
           </button>
@@ -268,22 +272,59 @@ export default function Step5Review({
         </div>
       </div>
 
-      {/* Section 4: Preferences & Agreement */}
+      {/* Section 4: Bank Details */}
       <div
         style={{
           padding: '16px',
           borderRadius: 'var(--radius-sm)',
-          background: 'var(--bg-tertiary)',
-          border: '1px solid var(--border-subtle)',
+          background: '#ffffff',
+          border: '1px solid var(--border-medium)',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
+          marginBottom: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <h4 style={{ fontSize: '15px' }}>4. Bank Details</h4>
+          <button
+            type="button"
+            onClick={() => onEditStep(4)}
+            style={{ background: 'transparent', color: 'var(--flame-600)', fontSize: '13px', fontWeight: 600 }}
+          >
+            Edit
+          </button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', fontSize: '13px' }}>
+          <div><span style={{ color: 'var(--text-muted)' }}>A/C Name:</span> <strong>{data.bankAccountName || 'Not entered'}</strong></div>
+          <div>
+            <span style={{ color: 'var(--text-muted)' }}>A/C Number:</span>{' '}
+            <strong style={{ fontFamily: 'monospace' }}>
+              {data.bankAccountNumber ? `•••• ${data.bankAccountNumber.slice(-4)}` : '••••••••'}
+            </strong>
+          </div>
+          <div>
+            <span style={{ color: 'var(--text-muted)' }}>Sort Code:</span>{' '}
+            <strong style={{ fontFamily: 'monospace' }}>{data.bankSortCode || '••-••-••'}</strong>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 5: Preferences & Agreement */}
+      <div
+        style={{
+          padding: '16px',
+          borderRadius: 'var(--radius-sm)',
+          background: '#ffffff',
+          border: '1px solid var(--border-medium)',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
           marginBottom: '24px',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <h4 style={{ fontSize: '15px' }}>4. Preferences & Agreement</h4>
+          <h4 style={{ fontSize: '15px' }}>5. Preferences & Agreement</h4>
           <button
             type="button"
-            onClick={() => onEditStep(4)}
-            style={{ background: 'transparent', color: 'var(--flame-400)', fontSize: '13px', fontWeight: 600 }}
+            onClick={() => onEditStep(5)}
+            style={{ background: 'transparent', color: 'var(--flame-600)', fontSize: '13px', fontWeight: 600 }}
           >
             Edit
           </button>

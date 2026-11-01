@@ -61,6 +61,7 @@ export interface DriverApplication {
   email: string;
   residentialAddress: string;
   postcode: string;
+  nationalInsuranceNumber: string;
   tflDriverBadgeNum: string;
   tflDriverBadgeExpiry: string;
   profilePhotoUrl?: string;
@@ -74,19 +75,24 @@ export interface DriverApplication {
   passengerSeats: number;
   tflPhvVehicleLicence: string;
   tflPhvVehicleExpiry: string;
-  vehicleCategory: string; // Saloon, Estate, MPV, Executive
+  vehicleCategory: string; // Saloon, Estate, MPV5, MPV6, MPV 7/8, Executive
 
   // Step 3: Documents
   documents: Record<DocumentType, UploadedDoc | null>;
 
-  // Step 4: Preferences & Agreement
+  // Step 4: Bank Details
+  bankAccountName: string;
+  bankAccountNumber: string;
+  bankSortCode: string;
+
+  // Step 5: Preferences & Agreement
   preferredAirports: string[];
   operatingZones: string[];
   termsAccepted: boolean;
   termsAcceptedAt?: string;
   signatureDataUrl?: string;
 
-  // Step 5: Submission
+  // Step 6: Submission
   consentAccuracy: boolean;
   submittedAt?: string;
 
@@ -111,6 +117,7 @@ export const INITIAL_APPLICATION: DriverApplication = {
   email: '',
   residentialAddress: '',
   postcode: '',
+  nationalInsuranceNumber: '',
   tflDriverBadgeNum: '',
   tflDriverBadgeExpiry: '',
   profilePhotoUrl: '',
@@ -135,6 +142,10 @@ export const INITIAL_APPLICATION: DriverApplication = {
     MOT_CERTIFICATE: null,
     V5C_LOGBOOK: null,
   },
+
+  bankAccountName: '',
+  bankAccountNumber: '',
+  bankSortCode: '',
 
   preferredAirports: ['Heathrow (LHR)'],
   operatingZones: ['Greater London', 'West London / Harrow'],

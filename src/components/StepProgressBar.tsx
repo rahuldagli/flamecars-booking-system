@@ -9,8 +9,9 @@ const STEPS = [
   { step: 1, title: 'Identity' },
   { step: 2, title: 'Vehicle' },
   { step: 3, title: 'Documents' },
-  { step: 4, title: 'Agreement' },
-  { step: 5, title: 'Review' },
+  { step: 4, title: 'Bank Details' },
+  { step: 5, title: 'Agreement' },
+  { step: 6, title: 'Review' },
 ];
 
 export default function StepProgressBar({ currentStep, onStepClick }: StepProgressBarProps) {
@@ -35,7 +36,7 @@ export default function StepProgressBar({ currentStep, onStepClick }: StepProgre
             left: '24px',
             right: '24px',
             height: '3px',
-            background: 'var(--border-subtle)',
+            background: 'var(--border-medium)',
             zIndex: 1,
           }}
         />
@@ -87,14 +88,14 @@ export default function StepProgressBar({ currentStep, onStepClick }: StepProgre
                     ? 'var(--success)'
                     : isCurrent
                     ? 'var(--flame-gradient)'
-                    : 'var(--bg-tertiary)',
+                    : '#ffffff',
                   color: isDone || isCurrent ? '#ffffff' : 'var(--text-muted)',
                   border: isCurrent
-                    ? '2px solid #ffffff'
+                    ? '2px solid var(--flame-500)'
                     : isDone
                     ? '2px solid var(--success)'
-                    : '2px solid var(--border-subtle)',
-                  boxShadow: isCurrent ? 'var(--flame-glow)' : 'none',
+                    : '2px solid var(--border-medium)',
+                  boxShadow: isCurrent ? '0 2px 8px rgba(234, 88, 12, 0.3)' : '0 1px 2px rgba(0, 0, 0, 0.04)',
                   transition: 'all 0.25s ease',
                 }}
               >
@@ -104,7 +105,7 @@ export default function StepProgressBar({ currentStep, onStepClick }: StepProgre
                 style={{
                   fontSize: '11px',
                   fontWeight: isCurrent ? 700 : 500,
-                  color: isCurrent ? 'var(--flame-400)' : isDone ? 'var(--text-primary)' : 'var(--text-muted)',
+                  color: isCurrent ? 'var(--flame-600)' : isDone ? 'var(--text-primary)' : 'var(--text-muted)',
                   marginTop: '6px',
                   textAlign: 'center',
                 }}

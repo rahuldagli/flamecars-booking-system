@@ -50,8 +50,8 @@ export default function ResumeModal({ isOpen, onClose, onResume }: ResumeModalPr
         position: 'fixed',
         inset: 0,
         zIndex: 100,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
+        backgroundColor: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -65,7 +65,9 @@ export default function ResumeModal({ isOpen, onClose, onResume }: ResumeModalPr
           maxWidth: '460px',
           padding: '28px',
           borderRadius: 'var(--radius-lg)',
+          background: '#ffffff',
           border: '1px solid var(--border-medium)',
+          boxShadow: '0 20px 25px -5px rgba(15, 23, 42, 0.15), 0 8px 10px -6px rgba(15, 23, 42, 0.05)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>

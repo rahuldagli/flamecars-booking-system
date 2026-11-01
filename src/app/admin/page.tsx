@@ -139,6 +139,7 @@ export default function AdminDashboardPage() {
       email: 'tariq.mahmood@example.com',
       residentialAddress: '42 Station Road, Harrow',
       postcode: 'HA1 2TY',
+      nationalInsuranceNumber: 'QQ 12 34 56 C',
       tflDriverBadgeNum: '089421',
       tflDriverBadgeExpiry: '2027-08-15',
       vrm: 'LM71 XKD',
@@ -150,6 +151,9 @@ export default function AdminDashboardPage() {
       tflPhvVehicleLicence: '49281',
       tflPhvVehicleExpiry: '2027-06-30',
       vehicleCategory: 'Executive',
+      bankAccountName: 'Tariq Mahmood',
+      bankAccountNumber: '84910293',
+      bankSortCode: '20-40-71',
       preferredAirports: ['Heathrow Airport (LHR)', 'Gatwick Airport (LGW)'],
       operatingZones: ['West London / Harrow', 'Central London'],
       termsAccepted: true,
@@ -462,8 +466,8 @@ export default function AdminDashboardPage() {
                 Auto-fill
               </button>
             </div>
-            <div>Email: <strong style={{ color: '#fff' }}>admin@flamecars.co.uk</strong></div>
-            <div>Password: <strong style={{ color: '#fff' }}>FlameCars#Admin2026!Sec</strong></div>
+            <div>Email: <strong style={{ color: 'var(--text-primary)' }}>admin@flamecars.co.uk</strong></div>
+            <div>Password: <strong style={{ color: 'var(--text-primary)' }}>FlameCars#Admin2026!Sec</strong></div>
           </div>
         </div>
       </div>
@@ -483,15 +487,16 @@ export default function AdminDashboardPage() {
           gap: '12px',
           padding: '10px 16px',
           borderRadius: 'var(--radius-md)',
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-subtle)',
+          background: '#ffffff',
+          border: '1px solid var(--border-medium)',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
           marginBottom: '20px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
           <span>👤</span>
           <span>
-            Signed in as: <strong style={{ color: '#fff' }}>{currentUser?.email || 'admin@flamecars.co.uk'}</strong>
+            Signed in as: <strong style={{ color: 'var(--text-primary)' }}>{currentUser?.email || 'admin@flamecars.co.uk'}</strong>
           </span>
           <span className="badge badge-approved" style={{ fontSize: '10px', padding: '2px 8px' }}>
             {currentUser?.role || 'SUPER_ADMIN'}
@@ -605,8 +610,9 @@ export default function AdminDashboardPage() {
                   style={{
                     padding: '4px 10px',
                     fontSize: '11px',
-                    background: filterStatus === st ? 'var(--flame-gradient)' : undefined,
-                    color: filterStatus === st ? '#fff' : undefined,
+                    background: filterStatus === st ? 'var(--flame-gradient)' : '#ffffff',
+                    color: filterStatus === st ? '#ffffff' : 'var(--text-secondary)',
+                    border: filterStatus === st ? '1px solid var(--flame-500)' : '1px solid var(--border-medium)',
                   }}
                 >
                   {st}
@@ -631,8 +637,9 @@ export default function AdminDashboardPage() {
                     style={{
                       padding: '14px',
                       borderRadius: 'var(--radius-md)',
-                      background: isSelected ? 'rgba(245, 158, 11, 0.12)' : 'var(--bg-tertiary)',
-                      border: isSelected ? '2px solid var(--flame-500)' : '1px solid var(--border-subtle)',
+                      background: isSelected ? 'var(--flame-50)' : '#ffffff',
+                      border: isSelected ? '2px solid var(--flame-500)' : '1px solid var(--border-medium)',
+                      boxShadow: isSelected ? '0 2px 8px rgba(234, 88, 12, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.02)',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
                     }}
@@ -696,21 +703,29 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Applicant Summary Accordion */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px', fontSize: '13px' }}>
-              <div style={{ padding: '12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)' }}>
-                <div style={{ fontWeight: 600, color: 'var(--flame-400)', marginBottom: '4px' }}>Driver Details</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '20px', fontSize: '13px' }}>
+              <div style={{ padding: '14px', background: '#ffffff', border: '1px solid var(--border-medium)', borderRadius: 'var(--radius-sm)', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)' }}>
+                <div style={{ fontWeight: 600, color: 'var(--flame-600)', marginBottom: '6px' }}>👤 Driver Details</div>
                 <div>Phone: <strong>{selectedApp.mobileNumber}</strong></div>
                 <div>Email: {selectedApp.email}</div>
                 <div>Address: {selectedApp.residentialAddress}, {selectedApp.postcode}</div>
+                <div>NI Number: <strong>{selectedApp.nationalInsuranceNumber || 'N/A'}</strong></div>
                 <div>TfL Badge: <strong>{selectedApp.tflDriverBadgeNum}</strong> (Exp: {selectedApp.tflDriverBadgeExpiry})</div>
               </div>
 
-              <div style={{ padding: '12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)' }}>
-                <div style={{ fontWeight: 600, color: 'var(--flame-400)', marginBottom: '4px' }}>Vehicle Details</div>
+              <div style={{ padding: '14px', background: '#ffffff', border: '1px solid var(--border-medium)', borderRadius: 'var(--radius-sm)', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)' }}>
+                <div style={{ fontWeight: 600, color: 'var(--flame-600)', marginBottom: '6px' }}>🚗 Vehicle Details</div>
                 <div>VRM: <strong>{selectedApp.vrm}</strong></div>
                 <div>Vehicle: {selectedApp.make} {selectedApp.model} ({selectedApp.colour})</div>
-                <div>Category: {selectedApp.vehicleCategory} ({selectedApp.passengerSeats} Seats)</div>
-                <div>PHV Licence: {selectedApp.tflPhvVehicleLicence} (Exp: {selectedApp.tflPhvVehicleExpiry})</div>
+                <div>Category: <strong>{selectedApp.vehicleCategory}</strong> ({selectedApp.passengerSeats} Seats)</div>
+                <div>Licence Expiry: {selectedApp.tflPhvVehicleExpiry || 'Uploaded in docs'}</div>
+              </div>
+
+              <div style={{ padding: '14px', background: '#ffffff', border: '1px solid var(--border-medium)', borderRadius: 'var(--radius-sm)', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)' }}>
+                <div style={{ fontWeight: 600, color: 'var(--flame-600)', marginBottom: '6px' }}>💳 Bank Details</div>
+                <div>A/C Name: <strong>{selectedApp.bankAccountName || 'N/A'}</strong></div>
+                <div>A/C Number: <strong style={{ fontFamily: 'monospace' }}>{selectedApp.bankAccountNumber || 'N/A'}</strong></div>
+                <div>Sort Code: <strong style={{ fontFamily: 'monospace' }}>{selectedApp.bankSortCode || 'N/A'}</strong></div>
               </div>
             </div>
 
@@ -727,8 +742,9 @@ export default function AdminDashboardPage() {
                       style={{
                         padding: '12px 14px',
                         borderRadius: 'var(--radius-sm)',
-                        background: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-subtle)',
+                        background: '#ffffff',
+                        border: '1px solid var(--border-medium)',
+                        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -742,7 +758,7 @@ export default function AdminDashboardPage() {
                           {doc ? (
                             <>
                               File: {doc.filename} &bull; Expiry:{' '}
-                              <strong style={{ color: doc.expiryDate ? '#fff' : 'var(--warning)' }}>
+                              <strong style={{ color: doc.expiryDate ? 'var(--text-primary)' : 'var(--warning)' }}>
                                 {doc.expiryDate || 'Not specified'}
                               </strong>
                             </>
@@ -802,8 +818,8 @@ export default function AdminDashboardPage() {
             position: 'fixed',
             inset: 0,
             zIndex: 100,
-            backgroundColor: 'rgba(0, 0, 0, 0.85)',
-            backdropFilter: 'blur(10px)',
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(6px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -819,6 +835,9 @@ export default function AdminDashboardPage() {
               overflowY: 'auto',
               padding: '24px',
               borderRadius: 'var(--radius-lg)',
+              background: '#ffffff',
+              border: '1px solid var(--border-medium)',
+              boxShadow: '0 20px 25px -5px rgba(15, 23, 42, 0.15)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -901,7 +920,7 @@ export default function AdminDashboardPage() {
                         <div>VRM: <strong>{selectedApp.documents[inspectDocType]!.aiExtractedData!.vrm}</strong></div>
                       )}
                       {selectedApp.documents[inspectDocType]!.aiExtractedData!.expiryDate && (
-                        <div>AI Expiry: <strong style={{ color: 'var(--flame-400)' }}>{selectedApp.documents[inspectDocType]!.aiExtractedData!.expiryDate}</strong></div>
+                        <div>AI Expiry: <strong style={{ color: 'var(--flame-600)' }}>{selectedApp.documents[inspectDocType]!.aiExtractedData!.expiryDate}</strong></div>
                       )}
                     </div>
                   </div>

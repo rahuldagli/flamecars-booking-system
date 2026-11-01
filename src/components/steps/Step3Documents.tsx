@@ -212,8 +212,9 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
           style={{
             padding: '6px 14px',
             fontSize: '12px',
-            background: activeCategory === 'all' ? 'var(--flame-gradient)' : undefined,
-            color: activeCategory === 'all' ? '#fff' : undefined,
+            background: activeCategory === 'all' ? 'var(--flame-gradient)' : '#ffffff',
+            color: activeCategory === 'all' ? '#ffffff' : 'var(--text-secondary)',
+            border: activeCategory === 'all' ? '1px solid var(--flame-500)' : '1px solid var(--border-medium)',
           }}
         >
           All Documents
@@ -225,8 +226,9 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
           style={{
             padding: '6px 14px',
             fontSize: '12px',
-            background: activeCategory === 'driver' ? 'var(--flame-gradient)' : undefined,
-            color: activeCategory === 'driver' ? '#fff' : undefined,
+            background: activeCategory === 'driver' ? 'var(--flame-gradient)' : '#ffffff',
+            color: activeCategory === 'driver' ? '#ffffff' : 'var(--text-secondary)',
+            border: activeCategory === 'driver' ? '1px solid var(--flame-500)' : '1px solid var(--border-medium)',
           }}
         >
           Driver Documents
@@ -238,8 +240,9 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
           style={{
             padding: '6px 14px',
             fontSize: '12px',
-            background: activeCategory === 'vehicle' ? 'var(--flame-gradient)' : undefined,
-            color: activeCategory === 'vehicle' ? '#fff' : undefined,
+            background: activeCategory === 'vehicle' ? 'var(--flame-gradient)' : '#ffffff',
+            color: activeCategory === 'vehicle' ? '#ffffff' : 'var(--text-secondary)',
+            border: activeCategory === 'vehicle' ? '1px solid var(--flame-500)' : '1px solid var(--border-medium)',
           }}
         >
           Vehicle Documents
@@ -275,8 +278,9 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
               style={{
                 padding: '18px',
                 borderRadius: 'var(--radius-md)',
-                background: isUploaded ? 'rgba(16, 185, 129, 0.04)' : 'var(--bg-tertiary)',
-                border: isUploaded ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid var(--border-subtle)',
+                background: isUploaded ? 'rgba(5, 150, 105, 0.04)' : '#ffffff',
+                border: isUploaded ? '1px solid rgba(5, 150, 105, 0.35)' : '1px solid var(--border-medium)',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
                 transition: 'all 0.2s ease',
               }}
             >
@@ -477,7 +481,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
           &larr; Back to Vehicle
         </button>
         <button type="button" onClick={handleContinue} className="btn-primary">
-          Continue to Agreement &rarr;
+          Continue to Bank Details &rarr;
         </button>
       </div>
     </div>

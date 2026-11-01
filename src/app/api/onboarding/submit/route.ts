@@ -10,7 +10,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Personal details are incomplete' }, { status: 400 });
     }
 
-    if (!application.vrm || !application.tflPhvVehicleLicence) {
+    if (!application.vrm) {
       return NextResponse.json({ error: 'Vehicle details are incomplete' }, { status: 400 });
     }
 
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     // Set submitted status
     application.status = 'SUBMITTED';
     application.submittedAt = new Date().toISOString();
-    application.currentStep = 5;
+    application.currentStep = 6;
 
     const saved = applicationStore.save(application);
 

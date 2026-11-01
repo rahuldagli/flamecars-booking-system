@@ -9,6 +9,7 @@ import Step0Landing from '@/components/steps/Step0Landing';
 import Step1Identity from '@/components/steps/Step1Identity';
 import Step2Vehicle from '@/components/steps/Step2Vehicle';
 import Step3Documents from '@/components/steps/Step3Documents';
+import Step4BankDetails from '@/components/steps/Step4BankDetails';
 import Step4Agreement from '@/components/steps/Step4Agreement';
 import Step5Review from '@/components/steps/Step5Review';
 
@@ -56,7 +57,7 @@ export default function OnboardingPage() {
   if (!isHydrated) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <div style={{ color: 'var(--flame-400)', fontSize: '16px' }}>Loading Flame Cars Onboarding...</div>
+        <div style={{ color: 'var(--flame-600)', fontSize: '16px' }}>Loading Flame Cars Onboarding...</div>
       </div>
     );
   }
@@ -77,7 +78,7 @@ export default function OnboardingPage() {
         >
           <div>
             Application Reference:{' '}
-            <strong style={{ color: 'var(--flame-400)' }}>
+            <strong style={{ color: 'var(--flame-600)' }}>
               {app.referenceNumber || 'DRAFT (Auto-assigned on submit)'}
             </strong>
           </div>
@@ -140,7 +141,7 @@ export default function OnboardingPage() {
       )}
 
       {app.currentStep === 4 && (
-        <Step4Agreement
+        <Step4BankDetails
           data={app}
           onChange={updateApp}
           onNext={() => updateApp({ currentStep: 5 })}
@@ -149,12 +150,21 @@ export default function OnboardingPage() {
       )}
 
       {app.currentStep === 5 && (
+        <Step4Agreement
+          data={app}
+          onChange={updateApp}
+          onNext={() => updateApp({ currentStep: 6 })}
+          onBack={() => updateApp({ currentStep: 4 })}
+        />
+      )}
+
+      {app.currentStep === 6 && (
         <Step5Review
           data={app}
           onChange={updateApp}
           onEditStep={(step) => updateApp({ currentStep: step })}
           onSubmitSuccess={(ref) => updateApp({ referenceNumber: ref, status: 'SUBMITTED' })}
-          onBack={() => updateApp({ currentStep: 4 })}
+          onBack={() => updateApp({ currentStep: 5 })}
         />
       )}
 

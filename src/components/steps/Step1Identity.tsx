@@ -34,6 +34,10 @@ export default function Step1Identity({ data, onChange, onNext, onBack }: Step1I
       setFormError('Please enter your UK postcode.');
       return;
     }
+    if (!data.nationalInsuranceNumber?.trim()) {
+      setFormError('Please enter your National Insurance Number.');
+      return;
+    }
     if (!data.tflDriverBadgeNum.trim()) {
       setFormError('Please enter your TfL PHV Driver Badge number.');
       return;
@@ -139,6 +143,23 @@ export default function Step1Identity({ data, onChange, onNext, onBack }: Step1I
             value={data.postcode}
             onChange={(e) => onChange({ postcode: e.target.value.toUpperCase() })}
           />
+        </div>
+      </div>
+
+      {/* National Insurance Number */}
+      <div style={{ marginBottom: '18px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+          National Insurance Number <span style={{ color: 'var(--flame-500)' }}>*</span>
+        </label>
+        <input
+          type="text"
+          placeholder="e.g. QQ 12 34 56 A"
+          value={data.nationalInsuranceNumber || ''}
+          onChange={(e) => onChange({ nationalInsuranceNumber: e.target.value.toUpperCase() })}
+          style={{ textTransform: 'uppercase', letterSpacing: '1px' }}
+        />
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          Required for HMRC compliance and UK right-to-work TfL verification.
         </div>
       </div>
 

@@ -11,10 +11,12 @@ interface Step2VehicleProps {
 }
 
 const CATEGORIES = [
-  { id: 'Saloon', name: 'Saloon (Sedan)', desc: 'Standard 4-seater (Toyota Prius, Passat, etc.)', tbmsId: 7 },
-  { id: 'Estate', name: 'Estate (Wagon)', desc: 'Extended boot space for airport luggage', tbmsId: 10 },
-  { id: 'MPV', name: 'MPV / 6-Seater', desc: 'Larger groups & family airport transfers', tbmsId: 11 },
-  { id: 'Executive', name: 'Executive', desc: 'Mercedes E-Class, BMW 5-Series, Audi A6', tbmsId: 14 },
+  { id: 'Saloon', name: 'Saloon (Sedan)', desc: 'Standard 4-seater (Toyota Prius, Passat, etc.)', seats: 4, tbmsId: 7 },
+  { id: 'Estate', name: 'Estate (Wagon)', desc: 'Extended boot space for airport luggage', seats: 4, tbmsId: 10 },
+  { id: 'MPV5', name: 'MPV5', desc: '5-Passenger capacity MPV / Space Wagon', seats: 5, tbmsId: 11 },
+  { id: 'MPV6', name: 'MPV6', desc: '6-Passenger capacity MPV', seats: 6, tbmsId: 12 },
+  { id: 'MPV 7/8', name: 'MPV 7/8', desc: '7 to 8 Passenger large capacity vehicle', seats: 8, tbmsId: 13 },
+  { id: 'Executive', name: 'Executive', desc: 'Mercedes E-Class, BMW 5-Series, Audi A6', seats: 4, tbmsId: 14 },
 ];
 
 export default function Step2Vehicle({ data, onChange, onNext, onBack }: Step2VehicleProps) {
@@ -41,10 +43,6 @@ export default function Step2Vehicle({ data, onChange, onNext, onBack }: Step2Ve
     }
     if (!data.colour.trim()) {
       setError('Please enter vehicle colour.');
-      return;
-    }
-    if (!data.tflPhvVehicleLicence.trim()) {
-      setError('Please enter the TfL PHV Vehicle Licence number.');
       return;
     }
     if (!data.tflPhvVehicleExpiry) {
@@ -100,6 +98,7 @@ export default function Step2Vehicle({ data, onChange, onNext, onBack }: Step2Ve
               fontFamily: 'monospace',
               minWidth: '150px',
               textAlign: 'center',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
             }}
           >
             {data.vrm.trim() || 'REG PLATE'}
@@ -167,26 +166,41 @@ export default function Step2Vehicle({ data, onChange, onNext, onBack }: Step2Ve
         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
           Select Vehicle Category (Flame Cars Fleet Tier)
         </label>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
           {CATEGORIES.map((cat) => {
             const isSelected = data.vehicleCategory === cat.id;
             return (
               <div
                 key={cat.id}
-                onClick={() => onChange({ vehicleCategory: cat.id })}
+                onClick={() => onChange({ vehicleCategory: cat.id, passengerSeats: cat.seats })}
                 style={{
                   padding: '14px',
                   borderRadius: 'var(--radius-sm)',
-                  background: isSelected ? 'rgba(245, 158, 11, 0.12)' : 'var(--bg-tertiary)',
-                  border: isSelected ? '2px solid var(--flame-500)' : '1px solid var(--border-subtle)',
+                  background: isSelected ? 'var(--flame-50)' : '#ffffff',
+                  border: isSelected ? '2px solid var(--flame-500)' : '1px solid var(--border-medium)',
+                  boxShadow: isSelected ? '0 2px 8px rgba(234, 88, 12, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.02)',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: '14px', color: isSelected ? 'var(--flame-400)' : '#fff' }}>
-                  {cat.name}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontWeight: 700, fontSize: '14px', color: isSelected ? 'var(--flame-600)' : 'var(--text-primary)' }}>
+                    {cat.name}
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
+                      background: isSelected ? 'var(--flame-500)' : 'var(--bg-tertiary)',
+                      color: isSelected ? '#ffffff' : 'var(--text-secondary)',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {cat.seats} Seats
+                  </span>
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
                   {cat.desc}
                 </div>
               </div>
@@ -195,28 +209,18 @@ export default function Step2Vehicle({ data, onChange, onNext, onBack }: Step2Ve
         </div>
       </div>
 
-      {/* TfL Vehicle Licence Number & Expiry */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '28px' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-            TfL PHV Vehicle Licence Number <span style={{ color: 'var(--flame-500)' }}>*</span>
-          </label>
-          <input
-            type="text"
-            placeholder="e.g. 30219"
-            value={data.tflPhvVehicleLicence}
-            onChange={(e) => onChange({ tflPhvVehicleLicence: e.target.value })}
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-            Vehicle Licence Expiry Date <span style={{ color: 'var(--flame-500)' }}>*</span>
-          </label>
-          <input
-            type="date"
-            value={data.tflPhvVehicleExpiry}
-            onChange={(e) => onChange({ tflPhvVehicleExpiry: e.target.value })}
-          />
+      {/* Vehicle Licence Expiry */}
+      <div style={{ marginBottom: '28px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+          Vehicle Licence Expiry Date <span style={{ color: 'var(--flame-500)' }}>*</span>
+        </label>
+        <input
+          type="date"
+          value={data.tflPhvVehicleExpiry}
+          onChange={(e) => onChange({ tflPhvVehicleExpiry: e.target.value })}
+        />
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          Document image/disc will be scanned and verified with AI in Step 3.
         </div>
       </div>
 

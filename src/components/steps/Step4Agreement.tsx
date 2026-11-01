@@ -74,7 +74,7 @@ export default function Step4Agreement({ data, onChange, onNext, onBack }: Step4
   return (
     <div className="glass-panel animate-fade-in" style={{ padding: '28px' }}>
       <div style={{ marginBottom: '22px' }}>
-        <h2 style={{ fontSize: '22px', marginBottom: '6px' }}>4. Operating Preferences & Terms</h2>
+        <h2 style={{ fontSize: '22px', marginBottom: '6px' }}>5. Operating Preferences & Terms</h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
           Select your dispatch preferences and review the independent driver engagement agreement.
         </p>
@@ -89,7 +89,7 @@ export default function Step4Agreement({ data, onChange, onNext, onBack }: Step4
             color: 'var(--danger)',
             fontSize: '13px',
             marginBottom: '20px',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
+            border: '1px solid rgba(220, 38, 38, 0.25)',
           }}
         >
           {error}
@@ -114,9 +114,10 @@ export default function Step4Agreement({ data, onChange, onNext, onBack }: Step4
                   borderRadius: 'var(--radius-sm)',
                   fontSize: '13px',
                   fontWeight: 500,
-                  background: isSelected ? 'rgba(245, 158, 11, 0.18)' : 'var(--bg-tertiary)',
-                  color: isSelected ? 'var(--flame-400)' : 'var(--text-secondary)',
-                  border: isSelected ? '1px solid var(--flame-500)' : '1px solid var(--border-subtle)',
+                  background: isSelected ? 'var(--flame-50)' : '#ffffff',
+                  color: isSelected ? 'var(--flame-600)' : 'var(--text-secondary)',
+                  border: isSelected ? '1px solid var(--flame-500)' : '1px solid var(--border-medium)',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
                 }}
               >
                 {isSelected ? '✓ ' : '+ '}
@@ -145,9 +146,10 @@ export default function Step4Agreement({ data, onChange, onNext, onBack }: Step4
                   borderRadius: 'var(--radius-sm)',
                   fontSize: '13px',
                   fontWeight: 500,
-                  background: isSelected ? 'rgba(245, 158, 11, 0.18)' : 'var(--bg-tertiary)',
-                  color: isSelected ? 'var(--flame-400)' : 'var(--text-secondary)',
-                  border: isSelected ? '1px solid var(--flame-500)' : '1px solid var(--border-subtle)',
+                  background: isSelected ? 'var(--flame-50)' : '#ffffff',
+                  color: isSelected ? 'var(--flame-600)' : 'var(--text-secondary)',
+                  border: isSelected ? '1px solid var(--flame-500)' : '1px solid var(--border-medium)',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
                 }}
               >
                 {isSelected ? '✓ ' : '+ '}
@@ -169,8 +171,8 @@ export default function Step4Agreement({ data, onChange, onNext, onBack }: Step4
             overflowY: 'auto',
             padding: '16px',
             borderRadius: 'var(--radius-sm)',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-subtle)',
+            background: '#ffffff',
+            border: '1px solid var(--border-medium)',
             fontSize: '12px',
             color: 'var(--text-secondary)',
             lineHeight: 1.6,
@@ -258,7 +260,7 @@ export default function Step4Agreement({ data, onChange, onNext, onBack }: Step4
       {/* Navigation Buttons */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button type="button" onClick={onBack} className="btn-secondary">
-          &larr; Back to Documents
+          &larr; Back to Bank Details
         </button>
         <button type="button" onClick={handleContinue} className="btn-primary">
           Review & Submit &rarr;
