@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { applicationStore } from '@/lib/serverStore';
 import { DriverApplication } from '@/types/onboarding';
+import { detectNameDiscrepancies } from '@/lib/nameCheck';
 
 export async function POST(req: Request) {
   try {
@@ -20,6 +21,19 @@ export async function POST(req: Request) {
 
     if (!application.termsAccepted) {
       return NextResponse.json({ error: 'You must accept the independent driver agreement' }, { status: 400 });
+    }
+
+    // Enforce name discrepancy confirmation if different person documentation is attached
+    const discrepancies = detectNameDiscrepancies(application);
+    if (discrepancies.length > 0 && !application.nameMismatchConfirmed) {
+      return NextResponse.json(
+        {
+          error:
+            'Document Name Discrepancy: You have attached documentation for a different person. Please review and confirm the name discrepancy on the review screen before submitting.',
+          discrepancies,
+        },
+        { status: 400 }
+      );
     }
 
     // Set submitted status

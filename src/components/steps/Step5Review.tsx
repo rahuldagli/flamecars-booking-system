@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { DriverApplication, REQUIRED_DOCUMENTS_CONFIG } from '@/types/onboarding';
+import { detectNameDiscrepancies } from '@/lib/nameCheck';
 
 interface Step5ReviewProps {
   data: DriverApplication;
@@ -21,8 +22,13 @@ export default function Step5Review({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
+  const discrepancies = detectNameDiscrepancies(data);
 
   async function handleSubmit() {
+    if (discrepancies.length > 0 && !data.nameMismatchConfirmed) {
+      setError('Document Name Discrepancy: You have attached documentation with different name details. Please select an explanation and check the confirmation box below before submitting.');
+      return;
+    }
     if (!data.consentAccuracy) {
       setError('Please certify that all information and documents supplied are true and accurate.');
       return;
@@ -335,6 +341,134 @@ export default function Step5Review({
           <div><span style={{ color: 'var(--text-muted)' }}>E-Signature:</span> <em>{data.signatureDataUrl || data.legalName}</em></div>
         </div>
       </div>
+
+      {/* Name Discrepancy Warning & Mandatory Confirmation */}
+      {discrepancies.length > 0 && (
+        <div
+          style={{
+            marginBottom: '24px',
+            padding: '20px',
+            borderRadius: 'var(--radius-md)',
+            background: '#fff7ed',
+            border: '2px solid #ea580c',
+            boxShadow: '0 2px 10px rgba(234, 88, 12, 0.12)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '24px' }}>⚠️</span>
+            <div>
+              <h4 style={{ fontSize: '16px', fontWeight: 800, color: '#c2410c', margin: 0 }}>
+                Action Required: Different Person&apos;s Documentation Detected
+              </h4>
+              <div style={{ fontSize: '12px', color: '#9a3412', marginTop: '2px' }}>
+                One or more documents you attached show a different name from your registered applicant name (<strong>{data.legalName}</strong>).
+              </div>
+            </div>
+          </div>
+
+          {/* Table of Discrepancies */}
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '6px',
+              border: '1px solid #fed7aa',
+              padding: '12px 16px',
+              marginBottom: '16px',
+            }}
+          >
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', marginBottom: '8px' }}>
+              Detected Document Name Discrepancies:
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {discrepancies.map((d) => (
+                <div
+                  key={d.docType}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '13px',
+                    padding: '6px 0',
+                    borderBottom: '1px solid #ffedd5',
+                    flexWrap: 'wrap',
+                    gap: '6px',
+                  }}
+                >
+                  <div>
+                    <span style={{ fontWeight: 600, color: '#111827' }}>{d.docTitle}:</span>{' '}
+                    <span style={{ color: '#c2410c', fontWeight: 700 }}>&ldquo;{d.extractedName}&rdquo;</span>{' '}
+                    <span style={{ fontSize: '11px', color: '#6b7280' }}>({d.fieldLabel})</span>
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                    Registered Applicant: <strong>{data.legalName}</strong>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Reason Selection */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#9a3412', marginBottom: '6px' }}>
+              Select the reason for this name discrepancy (required for TfL compliance audit):
+            </label>
+            <select
+              value={data.nameMismatchReason || ''}
+              onChange={(e) => onChange({ nameMismatchReason: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                fontSize: '13px',
+                borderRadius: '6px',
+                border: '1px solid #fdba74',
+                background: '#ffffff',
+                color: '#111827',
+              }}
+            >
+              <option value="">-- Select reason for name difference --</option>
+              <option value="Vehicle / insurance is owned or leased by a third party or company (Authorized Driver)">
+                Vehicle / insurance is owned or leased by a third party or company (Authorized Driver)
+              </option>
+              <option value="Vehicle or policy belongs to a family member / spouse (Named Driver)">
+                Vehicle or policy belongs to a family member / spouse (Named Driver)
+              </option>
+              <option value="Legal name change or marriage (Supporting evidence provided)">
+                Legal name change or marriage (Supporting evidence provided)
+              </option>
+              <option value="Typographical / middle name difference on official record">
+                Typographical / middle name difference on official record
+              </option>
+              <option value="Other legitimate regulatory compliance arrangement">
+                Other legitimate regulatory compliance arrangement
+              </option>
+            </select>
+          </div>
+
+          {/* Mandatory Confirmation Checkbox */}
+          <div>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#7c2d12',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={!!data.nameMismatchConfirmed}
+                onChange={(e) => onChange({ nameMismatchConfirmed: e.target.checked })}
+                style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#ea580c' }}
+              />
+              <span>
+                <strong>I confirm that I have reviewed the name differences above.</strong> I certify that I am legally authorized to operate under these documents, and I understand that Transport for London and Flame Cars compliance will inspect these records before activation.
+              </span>
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* Accuracy Declaration Checkbox */}
       <div style={{ marginBottom: '28px' }}>

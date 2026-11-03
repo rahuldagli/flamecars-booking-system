@@ -100,6 +100,9 @@ export interface DriverApplication {
   // Step 6: Submission
   consentAccuracy: boolean;
   submittedAt?: string;
+  // Name Discrepancy & Third-Party Documentation Confirmation
+  nameMismatchConfirmed?: boolean;
+  nameMismatchReason?: string;
 
   // Compliance / TBMS
   tflRegisterVerified: boolean;
@@ -156,6 +159,8 @@ export const INITIAL_APPLICATION: DriverApplication = {
   operatingZones: ['Greater London', 'West London / Harrow'],
   termsAccepted: false,
   consentAccuracy: false,
+  nameMismatchConfirmed: false,
+  nameMismatchReason: '',
   tflRegisterVerified: false,
   tbmsSyncStatus: 'NOT_SYNCED',
 };

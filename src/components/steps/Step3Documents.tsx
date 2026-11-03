@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { DriverApplication, DocumentType, REQUIRED_DOCUMENTS_CONFIG, UploadedDoc } from '@/types/onboarding';
 import DocumentPreviewModal from '@/components/DocumentPreviewModal';
+import { areNamesCompatible, detectNameDiscrepancies } from '@/lib/nameCheck';
 
 interface Step3DocumentsProps {
   data: DriverApplication;
@@ -15,6 +16,8 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<'all' | 'driver' | 'vehicle'>('all');
   const [previewDocType, setPreviewDocType] = useState<DocumentType | null>(null);
+
+  const nameDiscrepancies = detectNameDiscrepancies(data);
 
   async function handleFileUpload(type: DocumentType, title: string, file: File, expiry?: string) {
     if (file.size > 15 * 1024 * 1024) {
@@ -86,6 +89,9 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
             if (detectedExpiry && !data.tflDriverBadgeExpiry) {
               appFieldUpdates.tflDriverBadgeExpiry = detectedExpiry;
             }
+            if (aiData.fullName && !data.legalName && (aiData.confidence || 0) >= 0.8) {
+              appFieldUpdates.legalName = aiData.fullName;
+            }
           } else if (type === 'TFL_PHV_VEHICLE_LICENCE') {
             if (aiData.vrm && !data.vrm) {
               appFieldUpdates.vrm = aiData.vrm;
@@ -97,7 +103,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
               appFieldUpdates.tflPhvVehicleExpiry = detectedExpiry;
             }
           } else if (type === 'DVLA_DRIVING_LICENCE_FRONT') {
-            if (aiData.fullName && !data.legalName) {
+            if (aiData.fullName && !data.legalName && (aiData.confidence || 0) >= 0.8) {
               appFieldUpdates.legalName = aiData.fullName;
             }
           }
@@ -209,9 +215,12 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
         if (type === 'TFL_PHV_DRIVER_BADGE_FRONT') {
           if (aiData.licenceNumber && !data.tflDriverBadgeNum) appUpdates.tflDriverBadgeNum = aiData.licenceNumber;
           if (detectedExpiry && !data.tflDriverBadgeExpiry) appUpdates.tflDriverBadgeExpiry = detectedExpiry;
+          if (aiData.fullName && !data.legalName && (aiData.confidence || 0) >= 0.8) appUpdates.legalName = aiData.fullName;
         } else if (type === 'TFL_PHV_VEHICLE_LICENCE') {
           if (aiData.vrm && !data.vrm) appUpdates.vrm = aiData.vrm;
           if (detectedExpiry && !data.tflPhvVehicleExpiry) appUpdates.tflPhvVehicleExpiry = detectedExpiry;
+        } else if (type === 'DVLA_DRIVING_LICENCE_FRONT') {
+          if (aiData.fullName && !data.legalName && (aiData.confidence || 0) >= 0.8) appUpdates.legalName = aiData.fullName;
         }
 
         const fullUpdated = { ...data, ...appUpdates };
@@ -366,6 +375,19 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
           const isPdf = doc?.mimeType?.includes('pdf') || doc?.filename?.toLowerCase().endsWith('.pdf');
           const isWord = doc?.mimeType?.includes('word') || /\.(docx|doc)$/i.test(doc?.filename || '');
           const isSheet = doc?.mimeType?.includes('sheet') || doc?.mimeType?.includes('csv') || /\.(xlsx|xls|csv)$/i.test(doc?.filename || '');
+
+          const extractedDocName = (
+            config.type === 'V5C_LOGBOOK'
+              ? aiData?.registeredKeeper
+              : aiData?.fullName
+          ) as string | undefined;
+
+          const hasNameConflict = Boolean(
+            data.legalName &&
+            extractedDocName &&
+            extractedDocName.trim().length > 1 &&
+            !areNamesCompatible(data.legalName, extractedDocName)
+          );
 
           return (
             <div
@@ -568,59 +590,65 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                         </div>
                       </div>
                     ) : aiData ? (
-                      <div
-                        style={{
-                          marginTop: '14px',
-                          padding: '16px',
-                          borderRadius: 'var(--radius-md)',
-                          background: '#f0fdf4',
-                          border: '1px solid #bbf7d0',
-                          boxShadow: '0 2px 5px rgba(16, 185, 129, 0.08)',
-                        }}
-                      >
-                        {/* Header Banner */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '16px' }}>✨</span>
-                            <span style={{ fontSize: '13px', fontWeight: 800, color: '#166534' }}>
-                              AI Extracted Details • {aiData.documentTypeDetected || config.title}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                background: '#dcfce7',
-                                color: '#15803d',
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                border: '1px solid #86efac',
-                              }}
-                            >
-                              {Math.round((aiData.confidence || 0.98) * 100)}% Confidence
-                            </span>
-                          </div>
-                          <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700 }}>
-                            ✓ Saved to Database
-                          </span>
-                        </div>
-
-                        {/* Summary description */}
-                        {aiData.summary && (
+                      (() => {
+                        const isHighConf = (aiData.confidence || 0) >= 0.75;
+                        return (
                           <div
                             style={{
-                              fontSize: '12px',
-                              color: '#166534',
-                              marginBottom: '12px',
-                              lineHeight: 1.5,
-                              background: 'rgba(255, 255, 255, 0.75)',
-                              padding: '8px 12px',
-                              borderRadius: '6px',
-                              border: '1px solid #dcfce7',
+                              marginTop: '14px',
+                              padding: '16px',
+                              borderRadius: 'var(--radius-md)',
+                              background: isHighConf ? '#f0fdf4' : '#fffbeb',
+                              border: isHighConf ? '1px solid #bbf7d0' : '1px solid #fde68a',
+                              boxShadow: isHighConf
+                                ? '0 2px 5px rgba(16, 185, 129, 0.08)'
+                                : '0 2px 5px rgba(245, 158, 11, 0.08)',
                             }}
                           >
-                            {aiData.summary}
-                          </div>
-                        )}
+                            {/* Header Banner */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '16px' }}>{isHighConf ? '✨' : '⚠️'}</span>
+                                <span style={{ fontSize: '13px', fontWeight: 800, color: isHighConf ? '#166534' : '#92400e' }}>
+                                  {isHighConf ? 'AI Extracted Details • ' : 'Manual Verification • '}
+                                  {aiData.documentTypeDetected || config.title}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    background: isHighConf ? '#dcfce7' : '#fef3c7',
+                                    color: isHighConf ? '#15803d' : '#b45309',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    border: isHighConf ? '1px solid #86efac' : '1px solid #fcd34d',
+                                  }}
+                                >
+                                  {Math.round((aiData.confidence || 0.5) * 100)}% Confidence
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '11px', color: isHighConf ? '#16a34a' : '#d97706', fontWeight: 700 }}>
+                                {isHighConf ? '✓ Saved to Database' : 'Manual entry / check'}
+                              </span>
+                            </div>
+
+                            {/* Summary description */}
+                            {aiData.summary && (
+                              <div
+                                style={{
+                                  fontSize: '12px',
+                                  color: isHighConf ? '#166534' : '#92400e',
+                                  marginBottom: '12px',
+                                  lineHeight: 1.5,
+                                  background: 'rgba(255, 255, 255, 0.75)',
+                                  padding: '8px 12px',
+                                  borderRadius: '6px',
+                                  border: isHighConf ? '1px solid #dcfce7' : '1px solid #fde68a',
+                                }}
+                              >
+                                {aiData.summary}
+                              </div>
+                            )}
 
                         {/* Key Extracted Fields Grid */}
                         <div
@@ -730,7 +758,73 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                           </button>
                         </div>
                       </div>
-                    ) : null}
+                    );
+                  })()
+                ) : null}
+
+                    {/* Name Mismatch Warning Banner */}
+                    {hasNameConflict && extractedDocName && (
+                      <div
+                        style={{
+                          marginTop: '12px',
+                          padding: '14px 16px',
+                          borderRadius: 'var(--radius-md)',
+                          background: '#fff7ed',
+                          border: '1px solid #fdba74',
+                          boxShadow: '0 2px 6px rgba(234, 88, 12, 0.08)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '18px' }}>⚠️</span>
+                          <span style={{ fontSize: '13px', fontWeight: 800, color: '#c2410c' }}>
+                            Different Person&apos;s Documentation Detected
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              background: '#ffedd5',
+                              color: '#9a3412',
+                              padding: '2px 8px',
+                              borderRadius: '12px',
+                              border: '1px solid #fed7aa',
+                            }}
+                          >
+                            Name Mismatch
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#7c2d12', lineHeight: 1.5 }}>
+                          This document is issued to <strong>&ldquo;{extractedDocName}&rdquo;</strong>, which does not match your registered applicant name <strong>&ldquo;{data.legalName}&rdquo;</strong>.
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#9a3412', marginTop: '6px', lineHeight: 1.4 }}>
+                          • If you accidentally uploaded someone else&apos;s document, please click <strong>Replace / Remove</strong> above.
+                          <br />
+                          • If this document legally belongs to a vehicle owner/lease company or spouse, you will be required to confirm this on the Review step before submitting.
+                        </div>
+                        {config.category === 'driver' && (
+                          <div style={{ marginTop: '10px' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onChange({ legalName: extractedDocName });
+                              }}
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                background: '#ea580c',
+                                color: '#ffffff',
+                                borderRadius: '6px',
+                                border: 'none',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Update my registered name to &ldquo;{extractedDocName}&rdquo;
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
@@ -738,27 +832,65 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                       Accepted formats: PDF, Images (JPG, PNG), Word (.docx), Sheets (.xlsx, .csv) • Max 15 MB • <span style={{ color: 'var(--flame-400)' }}>✨ AI Auto-Extract</span>
                     </div>
 
-                    <label
-                      className="btn-secondary"
-                      style={{
-                        padding: '8px 18px',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        borderColor: 'var(--flame-500)',
-                      }}
-                    >
-                      <span>📎</span> Choose File (PDF, Sheet, Word, Image)
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain"
-                        capture="environment"
-                        style={{ display: 'none' }}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleFileUpload(config.type, config.title, file);
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      {/* Choose File / Photo Library Button (NO capture attribute so mobile allows file/photo picker) */}
+                      <label
+                        className="btn-secondary"
+                        style={{
+                          padding: '8px 16px',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          borderColor: 'var(--flame-500)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontWeight: 600,
                         }}
-                      />
-                    </label>
+                      >
+                        <span>📁</span> Choose File / Photo Library
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleFileUpload(config.type, config.title, file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+
+                      {/* Take Photo Camera Shortcut */}
+                      <label
+                        className="btn-secondary"
+                        style={{
+                          padding: '8px 14px',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: 'rgba(234, 88, 12, 0.05)',
+                          borderColor: 'rgba(234, 88, 12, 0.35)',
+                          color: 'var(--flame-600)',
+                          fontWeight: 600,
+                        }}
+                        title="Open camera to capture physical document directly"
+                      >
+                        <span>📷</span> Take Photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleFileUpload(config.type, config.title, file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
                   </div>
                 )}
               </div>
@@ -766,6 +898,34 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
           );
         })}
       </div>
+
+      {/* Overall Name Discrepancy Alert */}
+      {nameDiscrepancies.length > 0 && (
+        <div
+          style={{
+            marginBottom: '20px',
+            padding: '14px 18px',
+            borderRadius: 'var(--radius-md)',
+            background: '#fff7ed',
+            border: '2px solid #ea580c',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            fontSize: '13px',
+            color: '#9a3412',
+          }}
+        >
+          <span style={{ fontSize: '28px', lineHeight: 1 }}>⚠️</span>
+          <div>
+            <div style={{ fontWeight: 800, color: '#c2410c', fontSize: '14px' }}>
+              Notice: {nameDiscrepancies.length} document{nameDiscrepancies.length > 1 ? 's have' : ' has'} different name details
+            </div>
+            <div style={{ fontSize: '12px', marginTop: '2px', lineHeight: 1.5 }}>
+              You have attached documentation for a different person. You will need to review and confirm this discrepancy on the final Review step before submitting.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation Buttons */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>

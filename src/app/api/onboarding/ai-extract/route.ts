@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { DocumentType } from '@/types/onboarding';
 import { applicationStore } from '@/lib/serverStore';
+import fs from 'fs';
+import path from 'path';
 
 interface ExtractRequest {
   appId?: string;
@@ -15,6 +17,108 @@ interface ExtractRequest {
   };
 }
 
+// Safely obtain OpenRouter API Key from environment or .env.local on disk
+function getOpenRouterApiKey(): string | undefined {
+  const envKey = process.env.OPENROUTER_API_KEY;
+  if (envKey && envKey.trim().length > 15 && !envKey.startsWith('your_')) {
+    return envKey.trim();
+  }
+
+  try {
+    const candidatePaths = [
+      path.resolve(process.cwd(), '.env.local'),
+      path.resolve(process.cwd(), '.env'),
+    ];
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        const text = fs.readFileSync(p, 'utf8');
+        const m = text.match(/^OPENROUTER_API_KEY\s*=\s*(.+)$/m);
+        if (m && m[1]) {
+          const val = m[1].trim().replace(/^["']|["']$/g, '');
+          if (val && val.length > 15 && !val.startsWith('your_')) {
+            process.env.OPENROUTER_API_KEY = val;
+            return val;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[AI OCR ENGINE] Could not read .env.local fallback:', err);
+  }
+
+  return undefined;
+}
+
+// Safely obtain preferred model
+function getOpenRouterModel(): string {
+  const envModel = process.env.OPENROUTER_MODEL;
+  if (envModel && envModel.trim().length > 0) {
+    return envModel.trim();
+  }
+
+  try {
+    const envLocal = path.resolve(process.cwd(), '.env.local');
+    if (fs.existsSync(envLocal)) {
+      const text = fs.readFileSync(envLocal, 'utf8');
+      const m = text.match(/^OPENROUTER_MODEL\s*=\s*(.+)$/m);
+      if (m && m[1]) {
+        const val = m[1].trim().replace(/^["']|["']$/g, '');
+        if (val) return val;
+      }
+    }
+  } catch {}
+
+  return 'google/gemini-2.5-flash';
+}
+
+// Normalize various date formats (e.g. DD/MM/YYYY, DD-MM-YYYY, DD Month YYYY) into strictly YYYY-MM-DD
+function normalizeDate(raw?: unknown): string | undefined {
+  if (!raw || typeof raw !== 'string') return undefined;
+  const str = raw.trim();
+
+  // Already standard YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+
+  // UK date format: DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+  const ukMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (ukMatch) {
+    const day = ukMatch[1].padStart(2, '0');
+    const month = ukMatch[2].padStart(2, '0');
+    const year = ukMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // YYYY/MM/DD
+  const revMatch = str.match(/^(\d{4})[\/\.](\d{1,2})[\/\.](\d{1,2})$/);
+  if (revMatch) {
+    const year = revMatch[1];
+    const month = revMatch[2].padStart(2, '0');
+    const day = revMatch[3].padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // Word month format: e.g. 15 Aug 2028 or 15 August 2028
+  const monthMap: Record<string, string> = {
+    jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+    jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+    january: '01', february: '02', march: '03', april: '04', june: '06',
+    july: '07', august: '08', september: '09', october: '10', november: '11', december: '12',
+  };
+  const wordMatch = str.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (wordMatch) {
+    const day = wordMatch[1].padStart(2, '0');
+    const mStr = wordMatch[2].toLowerCase();
+    const month = monthMap[mStr];
+    if (month) {
+      return `${wordMatch[3]}-${month}-${day}`;
+    }
+  }
+
+  return undefined;
+}
+
 export async function POST(req: Request) {
   try {
     const body: ExtractRequest = await req.json();
@@ -26,72 +130,88 @@ export async function POST(req: Request) {
 
     console.log(`[AI OCR ENGINE] Processing ${docType} (File: ${filename})...`);
 
-    // 1. If OpenRouter API key is configured, call OpenRouter Multimodal Vision for images/PDFs
-    const openRouterKey = process.env.OPENROUTER_API_KEY;
+    const openRouterKey = getOpenRouterApiKey();
+    const preferredModel = getOpenRouterModel();
     let visionResult: Record<string, unknown> | null = null;
 
+    // 1. Multimodal Vision OCR via OpenRouter if key is available and file is image/PDF
     if (openRouterKey && dataUrl && (dataUrl.startsWith('data:image/') || dataUrl.startsWith('data:application/pdf'))) {
       try {
-        visionResult = await callOpenRouterVision(openRouterKey, docType, dataUrl);
+        visionResult = await callOpenRouterVision(openRouterKey, preferredModel, docType, dataUrl);
         if (visionResult) {
-          console.log('[AI OCR ENGINE] OpenRouter extraction succeeded:', visionResult);
+          console.log('[AI OCR ENGINE] Vision extraction succeeded:', visionResult);
         }
       } catch (err) {
-        console.warn('[AI OCR ENGINE] OpenRouter call failed, falling back to heuristic OCR:', err);
-      }
-    }
-
-    // 2. Generate comprehensive TfL/DVLA heuristic extraction
-    const heuristicFallback = generateComprehensiveExtraction(docType, filename, dataUrl, currentAppData);
-
-    // 3. Merge vision results with heuristic fallback:
-    // If vision found actual text from image, preserve it; otherwise use heuristic fallback
-    let extractedData: Record<string, unknown> = { ...heuristicFallback };
-
-    if (visionResult && typeof visionResult === 'object') {
-      const validVisionEntries: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(visionResult)) {
-        if (v !== null && v !== undefined && v !== 'null' && v !== '') {
-          // If vision returned an unhelpful summary message, retain the heuristic summary
-          if (
-            k === 'summary' &&
-            typeof v === 'string' &&
-            (v.toLowerCase().includes('does not contain') ||
-              v.toLowerCase().includes('cannot be extracted') ||
-              v.toLowerCase().includes('unable to'))
-          ) {
-            continue;
-          }
-          validVisionEntries[k] = v;
+        console.warn('[AI OCR ENGINE] Primary OpenRouter vision attempt failed:', err);
+        // Secondary fallback model attempt
+        try {
+          visionResult = await callOpenRouterVision(openRouterKey, 'google/gemini-2.0-flash-001', docType, dataUrl);
+        } catch (fallbackErr) {
+          console.warn('[AI OCR ENGINE] Fallback vision model failed:', fallbackErr);
         }
       }
-
-      extractedData = {
-        ...heuristicFallback,
-        ...validVisionEntries,
-        keyFields: {
-          ...((heuristicFallback.keyFields as Record<string, string>) || {}),
-          ...((validVisionEntries.keyFields as Record<string, string>) || {}),
-        },
-      };
-
-      // Ensure keyFields reflect extracted core attributes
-      if (validVisionEntries.fullName) {
-        (extractedData.keyFields as Record<string, string>)['Driver Full Name'] = String(validVisionEntries.fullName);
-      }
-      if (validVisionEntries.licenceNumber) {
-        (extractedData.keyFields as Record<string, string>)['Licence / Badge Number'] = String(validVisionEntries.licenceNumber);
-      }
-      if (validVisionEntries.expiryDate) {
-        (extractedData.keyFields as Record<string, string>)['Expiry Date'] = String(validVisionEntries.expiryDate);
+    } else {
+      if (!openRouterKey) {
+        console.warn('[AI OCR ENGINE] OPENROUTER_API_KEY is not configured in .env.local');
       }
     }
 
-    // Add metadata timestamps & filename
+    // 2. Build extracted data representation
+    let extractedData: Record<string, unknown>;
+
+    if (visionResult && typeof visionResult === 'object') {
+      const normExpiry = normalizeDate(visionResult.expiryDate);
+      const fullName = typeof visionResult.fullName === 'string' && visionResult.fullName.trim() ? visionResult.fullName.trim() : undefined;
+      const licenceNumber = typeof visionResult.licenceNumber === 'string' && visionResult.licenceNumber.trim() ? visionResult.licenceNumber.trim() : undefined;
+      const vrm = typeof visionResult.vrm === 'string' && visionResult.vrm.trim() ? visionResult.vrm.trim().toUpperCase() : undefined;
+      const vehicleMake = typeof visionResult.vehicleMake === 'string' && visionResult.vehicleMake.trim() ? visionResult.vehicleMake.trim() : undefined;
+      const vehicleModel = typeof visionResult.vehicleModel === 'string' && visionResult.vehicleModel.trim() ? visionResult.vehicleModel.trim() : undefined;
+      const policyNumber = typeof visionResult.policyNumber === 'string' && visionResult.policyNumber.trim() ? visionResult.policyNumber.trim() : undefined;
+      const issuingAuthority = typeof visionResult.issuingAuthority === 'string' && visionResult.issuingAuthority.trim() ? visionResult.issuingAuthority.trim() : undefined;
+      const categories = typeof visionResult.categories === 'string' && visionResult.categories.trim() ? visionResult.categories.trim() : undefined;
+      const testResult = typeof visionResult.testResult === 'string' && visionResult.testResult.trim() ? visionResult.testResult.trim().toUpperCase() : undefined;
+      const registeredKeeper = typeof visionResult.registeredKeeper === 'string' && visionResult.registeredKeeper.trim() ? visionResult.registeredKeeper.trim() : undefined;
+      const confidence = typeof visionResult.confidence === 'number' ? visionResult.confidence : 0.95;
+
+      const keyFields: Record<string, string> = {};
+      if (fullName) keyFields['Driver Full Name'] = fullName;
+      if (licenceNumber) keyFields['Licence / Badge #'] = licenceNumber;
+      if (normExpiry) keyFields['Expiry Date'] = normExpiry;
+      if (vrm) keyFields['Vehicle VRM'] = vrm;
+      if (vehicleMake || vehicleModel) keyFields['Vehicle Make / Model'] = [vehicleMake, vehicleModel].filter(Boolean).join(' ');
+      if (policyNumber) keyFields['Policy #'] = policyNumber;
+      if (issuingAuthority) keyFields['Issuing Authority'] = issuingAuthority;
+      if (categories) keyFields['Categories'] = categories;
+      if (testResult) keyFields['Test Result'] = testResult;
+      if (registeredKeeper) keyFields['Registered Keeper'] = registeredKeeper;
+
+      extractedData = {
+        confidence,
+        documentTypeDetected: visionResult.documentTypeDetected || getDocReadableTitle(docType),
+        fullName,
+        licenceNumber,
+        expiryDate: normExpiry,
+        vrm,
+        vehicleMake,
+        vehicleModel,
+        policyNumber,
+        issuingAuthority,
+        categories,
+        testResult,
+        registeredKeeper,
+        summary: visionResult.summary || generateDocSummary(docType, fullName, licenceNumber, normExpiry, vrm),
+        rawTextContent: visionResult.rawTextContent || `OCR Verified for ${filename}`,
+        keyFields,
+      };
+    } else {
+      // Non-vision or fallback extraction (CSV / Spreadsheet parser or manual entry requirement)
+      extractedData = generateComprehensiveExtraction(docType, filename, dataUrl, currentAppData);
+    }
+
     extractedData.extractedAt = new Date().toISOString();
     extractedData.filename = filename;
 
-    // 4. Automatically persist to DB if appId is provided
+    // 3. Automatically persist to DB if appId is provided and confidence is genuine
     if (appId) {
       const app = applicationStore.get(appId);
       if (app) {
@@ -102,31 +222,40 @@ export async function POST(req: Request) {
             app.documents[docType]!.expiryDate = String(extractedData.expiryDate);
           }
         }
-        // Auto-fill core application fields if empty
-        if (docType === 'TFL_PHV_DRIVER_BADGE_FRONT') {
-          if (extractedData.licenceNumber && !app.tflDriverBadgeNum) {
-            app.tflDriverBadgeNum = String(extractedData.licenceNumber);
-          }
-          if (extractedData.expiryDate && !app.tflDriverBadgeExpiry) {
-            app.tflDriverBadgeExpiry = String(extractedData.expiryDate);
-          }
-          if (extractedData.fullName && !app.legalName) {
-            app.legalName = String(extractedData.fullName);
-          }
-        } else if (docType === 'DVLA_DRIVING_LICENCE_FRONT') {
-          if (extractedData.fullName && !app.legalName) {
-            app.legalName = String(extractedData.fullName);
-          }
-        } else if (docType === 'TFL_PHV_VEHICLE_LICENCE') {
-          if (extractedData.vrm && !app.vrm) {
-            app.vrm = String(extractedData.vrm);
-          }
-          if (extractedData.expiryDate && !app.tflPhvVehicleExpiry) {
-            app.tflPhvVehicleExpiry = String(extractedData.expiryDate);
+
+        // Only auto-fill core profile fields if extracted with high confidence (>= 0.80)
+        const isReliable = typeof extractedData.confidence === 'number' && extractedData.confidence >= 0.8;
+
+        if (isReliable) {
+          if (docType === 'TFL_PHV_DRIVER_BADGE_FRONT') {
+            if (extractedData.licenceNumber && !app.tflDriverBadgeNum) {
+              app.tflDriverBadgeNum = String(extractedData.licenceNumber);
+            }
+            if (extractedData.expiryDate && !app.tflDriverBadgeExpiry) {
+              app.tflDriverBadgeExpiry = String(extractedData.expiryDate);
+            }
+            if (extractedData.fullName && !app.legalName) {
+              app.legalName = String(extractedData.fullName);
+            }
+          } else if (docType === 'DVLA_DRIVING_LICENCE_FRONT') {
+            if (extractedData.fullName && !app.legalName) {
+              app.legalName = String(extractedData.fullName);
+            }
+          } else if (docType === 'TFL_PHV_VEHICLE_LICENCE') {
+            if (extractedData.vrm && !app.vrm) {
+              app.vrm = String(extractedData.vrm);
+            }
+            if (extractedData.licenceNumber && !app.tflPhvVehicleLicence) {
+              app.tflPhvVehicleLicence = String(extractedData.licenceNumber);
+            }
+            if (extractedData.expiryDate && !app.tflPhvVehicleExpiry) {
+              app.tflPhvVehicleExpiry = String(extractedData.expiryDate);
+            }
           }
         }
+
         applicationStore.save(app);
-        console.log(`[AI OCR ENGINE] Automatically saved extracted data to DB for application #${app.id}`);
+        console.log(`[AI OCR ENGINE] Automatically updated application #${app.id}`);
       }
     }
 
@@ -140,13 +269,135 @@ export async function POST(req: Request) {
   }
 }
 
-// OpenRouter Multimodal Vision API Caller
-async function callOpenRouterVision(apiKey: string, docType: string, dataUrl: string) {
-  const model = process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash';
+// Generate concise verification summary
+function generateDocSummary(
+  docType: DocumentType,
+  fullName?: string,
+  licenceNumber?: string,
+  expiryDate?: string,
+  vrm?: string
+): string {
+  const parts: string[] = [];
+  if (fullName) parts.push(`Driver: ${fullName}`);
+  if (licenceNumber) parts.push(`Licence #${licenceNumber}`);
+  if (vrm) parts.push(`VRM: ${vrm}`);
+  if (expiryDate) parts.push(`Expiry: ${expiryDate}`);
 
-  const prompt = `You are an expert UK Private Hire / Transport for London (TfL) document verification specialist.
-Analyze this document (${docType}).
-Extract all visible fields in strictly valid JSON format with keys:
+  if (parts.length > 0) {
+    return `${getDocReadableTitle(docType)} verified. ${parts.join(' | ')}.`;
+  }
+  return `${getDocReadableTitle(docType)} processed. Details indexed for compliance review.`;
+}
+
+// Map DocumentType to human-readable title
+function getDocReadableTitle(docType: DocumentType): string {
+  switch (docType) {
+    case 'TFL_PHV_DRIVER_BADGE_FRONT':
+      return 'TfL PHV Driver Badge (Front)';
+    case 'TFL_PHV_DRIVER_BADGE_BACK':
+      return 'TfL PHV Driver Badge (Back)';
+    case 'DVLA_DRIVING_LICENCE_FRONT':
+      return 'DVLA Driving Licence (Front)';
+    case 'DVLA_DRIVING_LICENCE_BACK':
+      return 'DVLA Driving Licence (Back)';
+    case 'TFL_PHV_VEHICLE_LICENCE':
+      return 'TfL PHV Vehicle Licence Disc';
+    case 'HIRE_REWARD_INSURANCE':
+      return 'Hire & Reward Insurance Certificate';
+    case 'MOT_CERTIFICATE':
+      return 'MOT Test Certificate';
+    case 'V5C_LOGBOOK':
+      return 'V5C Vehicle Logbook';
+    default:
+      return 'Document Verification';
+  }
+}
+
+// Document-specific prompt generator for multimodal vision
+function buildDocumentVisionPrompt(docType: DocumentType): string {
+  let docSpecificGuidance = '';
+
+  switch (docType) {
+    case 'TFL_PHV_DRIVER_BADGE_FRONT':
+      docSpecificGuidance = `This is a London Transport for London (TfL) Private Hire Driver Photocard Badge (Front).
+Extract:
+- fullName: The full name of the driver as shown on the badge (e.g. "Trevor SAMPLE").
+- licenceNumber: The 6-digit TfL badge / licence number printed in large bold numbers (e.g. "204116").
+- expiryDate: The expiry date strictly formatted as YYYY-MM-DD (e.g. if the badge shows "Expiry Date: 02/10/2027", output "2027-10-02").
+- issuingAuthority: "Transport for London"`;
+      break;
+
+    case 'TFL_PHV_DRIVER_BADGE_BACK':
+      docSpecificGuidance = `This is a London Transport for London (TfL) Private Hire Driver Badge (Reverse / Back).
+Extract:
+- summary: Confirm barcode, optical hologram, and licensing conditions.`;
+      break;
+
+    case 'DVLA_DRIVING_LICENCE_FRONT':
+      docSpecificGuidance = `This is a Great Britain / UK DVLA Photocard Driving Licence (Front).
+Extract:
+- fullName: Combine Surname from box 1 and First Names from box 2 (e.g. "Trevor SAMPLE").
+- licenceNumber: The 16-character UK driver number from box 5.
+- expiryDate: Document expiry date from box 4b (format strictly as YYYY-MM-DD).
+- categories: Vehicle entitlements (e.g. "B, B1").
+- issuingAuthority: "DVLA Swansea"`;
+      break;
+
+    case 'DVLA_DRIVING_LICENCE_BACK':
+      docSpecificGuidance = `This is a Great Britain / UK DVLA Driving Licence (Back).
+Extract:
+- categories: Vehicle entitlement categories and validity dates.
+- summary: Summary of entitlements and endorsements.`;
+      break;
+
+    case 'TFL_PHV_VEHICLE_LICENCE':
+      docSpecificGuidance = `This is a Transport for London (TfL) London PHV Vehicle Licence Disc / Inspection Certificate.
+Extract:
+- vrm: Vehicle Registration Mark / Number Plate (e.g. "LM71 XKD").
+- licenceNumber: The PHV vehicle licence disc number.
+- expiryDate: Expiry date strictly as YYYY-MM-DD.
+- vehicleMake: Vehicle manufacturer.
+- vehicleModel: Vehicle model.
+- issuingAuthority: "Transport for London PHV"`;
+      break;
+
+    case 'HIRE_REWARD_INSURANCE':
+      docSpecificGuidance = `This is a UK Private Hire (Hire & Reward) Motor Insurance Certificate.
+Extract:
+- policyNumber: Insurance policy number.
+- vrm: Insured Vehicle Registration Mark (VRM).
+- fullName: Policyholder name.
+- expiryDate: Policy expiry / end date strictly as YYYY-MM-DD.
+- issuingAuthority: Insurer / underwriter company name.`;
+      break;
+
+    case 'MOT_CERTIFICATE':
+      docSpecificGuidance = `This is a UK DVSA MOT Test Certificate (VT20).
+Extract:
+- licenceNumber: MOT test number (12 digits).
+- vrm: Vehicle Registration Mark (VRM).
+- expiryDate: MOT expiry date strictly as YYYY-MM-DD.
+- testResult: "PASS" or "FAIL".
+- issuingAuthority: "DVSA"`;
+      break;
+
+    case 'V5C_LOGBOOK':
+      docSpecificGuidance = `This is a UK DVLA V5C Registration Certificate (Vehicle Logbook).
+Extract:
+- licenceNumber: Document reference number (11 digits).
+- vrm: Vehicle Registration Mark (VRM).
+- registeredKeeper: Full name of registered keeper.
+- vehicleMake: Vehicle manufacturer.
+- vehicleModel: Vehicle model.
+- issuingAuthority: "DVLA Swansea"`;
+      break;
+  }
+
+  return `You are an expert UK Private Hire / Transport for London (TfL) document verification specialist.
+Analyze this document carefully (${docType}).
+${docSpecificGuidance}
+
+Format your response strictly as valid JSON with keys:
 - fullName: (string if visible on badge/licence, else omit)
 - licenceNumber: (string e.g. TfL badge number or DVLA driver number, else omit)
 - expiryDate: (string strictly formatted as YYYY-MM-DD, else omit)
@@ -154,10 +405,20 @@ Extract all visible fields in strictly valid JSON format with keys:
 - vehicleMake: (e.g. Mercedes-Benz, Toyota, else omit)
 - vehicleModel: (e.g. E-Class, Prius, else omit)
 - policyNumber: (insurance policy number if visible, else omit)
+- issuingAuthority: (authority or insurer name, else omit)
+- categories: (entitlement categories if visible, else omit)
+- testResult: (PASS or FAIL if MOT, else omit)
+- registeredKeeper: (registered keeper if V5C, else omit)
 - summary: (1 concise sentence summarizing what document and details were verified)
 - rawTextContent: (verbatim extracted text or transcription of key visible text blocks)
 - confidence: (float between 0.88 and 0.99)
+
 Return ONLY raw JSON, with no markdown code blocks or backticks.`;
+}
+
+// OpenRouter Multimodal Vision API Caller
+async function callOpenRouterVision(apiKey: string, model: string, docType: DocumentType, dataUrl: string): Promise<Record<string, unknown> | null> {
+  const prompt = buildDocumentVisionPrompt(docType);
 
   const requestBody = {
     model,
@@ -191,11 +452,15 @@ Return ONLY raw JSON, with no markdown code blocks or backticks.`;
   if (!res.ok) {
     const errorText = await res.text();
     console.warn(`[OpenRouter Error] HTTP ${res.status}:`, errorText);
-    return null;
+    throw new Error(`OpenRouter returned status ${res.status}: ${errorText}`);
   }
 
   const json = await res.json();
   const content = json.choices?.[0]?.message?.content;
+  if (!content || typeof content !== 'string') {
+    return null;
+  }
+
   try {
     const firstBrace = content.indexOf('{');
     const lastBrace = content.lastIndexOf('}');
@@ -203,7 +468,7 @@ Return ONLY raw JSON, with no markdown code blocks or backticks.`;
       const jsonStr = content.substring(firstBrace, lastBrace + 1);
       return JSON.parse(jsonStr);
     }
-    const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    const cleaned = content.replace(/```json/gi, '').replace(/```/g, '').trim();
     return JSON.parse(cleaned);
   } catch (err) {
     console.warn('[OpenRouter] Failed to parse JSON from content:', content, err);
@@ -211,26 +476,15 @@ Return ONLY raw JSON, with no markdown code blocks or backticks.`;
   }
 }
 
-// Fallback & High-Fidelity Heuristic Parser for UK Private Hire Documents, Sheets & Word Docs
+// Fallback Parser for UK Documents, CSV / Excel Sheets & Word Docs
+// NEVER hallucinates or hardcodes fake names like "Tariq Mahmood" or fake badge numbers!
 function generateComprehensiveExtraction(
   docType: DocumentType,
   filename: string,
   dataUrl?: string,
   applicant?: ExtractRequest['currentAppData']
 ): Record<string, unknown> {
-  const futureYear = new Date().getFullYear() + 2;
-  const name =
-    applicant?.legalName && applicant.legalName.trim() !== '' && applicant.legalName !== 'Applicant Name'
-      ? applicant.legalName
-      : 'Tariq Mahmood';
-  const vrm = applicant?.vrm && applicant.vrm.trim() !== '' ? applicant.vrm : 'LM71 XKD';
   const lowerFile = filename.toLowerCase();
-
-  // Detect file format category
-  let formatCategory = 'image';
-  if (lowerFile.endsWith('.pdf')) formatCategory = 'pdf';
-  else if (lowerFile.endsWith('.xlsx') || lowerFile.endsWith('.xls') || lowerFile.endsWith('.csv')) formatCategory = 'sheet';
-  else if (lowerFile.endsWith('.docx') || lowerFile.endsWith('.doc')) formatCategory = 'word';
 
   // If CSV document, attempt direct base64 decode of lines
   if (lowerFile.endsWith('.csv') && dataUrl && dataUrl.includes('base64,')) {
@@ -260,220 +514,52 @@ function generateComprehensiveExtraction(
   }
 
   // If Word Document (.docx / .doc)
-  if (formatCategory === 'word') {
+  if (lowerFile.endsWith('.docx') || lowerFile.endsWith('.doc')) {
     return {
-      confidence: 0.94,
+      confidence: 0.85,
       documentTypeDetected: 'Microsoft Word Document (.docx)',
-      summary: `Word Document "${filename}" verified and indexed. Clean text structure identified.`,
-      rawTextContent: `DOCUMENT TRANSCRIPTION: ${filename.toUpperCase()}\n\nSubject: Transport for London Private Hire Regulatory Submission\nApplicant Name: ${name}\nVehicle Registration: ${vrm}\nIssuing Authority: Transport for London (TfL) / DVLA\n\nThis electronic document confirms the driver and vehicle compliance records for Flame Cars private hire operations. All terms, policy covenants, and licensing schedules have been indexed.`,
+      summary: `Word Document "${filename}" verified and indexed for compliance records.`,
+      rawTextContent: `DOCUMENT: ${filename}\nStatus: Uploaded and indexed.`,
       keyFields: {
         'File Format': 'Microsoft Word (.docx)',
-        'Subject': 'TfL Private Hire Driver / Vehicle Record',
-        'Applicant Match': name,
-        'Vehicle Match': vrm,
+        'File Name': filename,
+        'Status': 'Uploaded & Indexed',
       },
     };
   }
 
   // If Excel Spreadsheet (.xlsx / .xls)
-  if (formatCategory === 'sheet') {
+  if (lowerFile.endsWith('.xlsx') || lowerFile.endsWith('.xls')) {
     return {
-      confidence: 0.94,
+      confidence: 0.85,
       documentTypeDetected: 'Microsoft Excel Spreadsheet (.xlsx)',
-      summary: `Excel Spreadsheet "${filename}" parsed: Worksheets, column headers, and data cells indexed.`,
-      tableData: {
-        headers: ['Row #', 'Field Name', 'Registered Value', 'Status'],
-        rows: [
-          ['1', 'Driver Full Name', name, 'VERIFIED'],
-          ['2', 'Vehicle Registration (VRM)', vrm, 'ACTIVE'],
-          ['3', 'Operator Name', 'Flame Cars London', 'CONFIRMED'],
-          ['4', 'TfL Licence Class', 'London Private Hire (PHV)', 'COMPLIANT'],
-          ['5', 'Expiry Check', `Valid through ${futureYear}`, 'CURRENT'],
-        ],
-      },
-      rawTextContent: `EXCEL WORKBOOK DATA: ${filename}\nSheet 1: Compliance Register\nDriver: ${name} | VRM: ${vrm} | Operator: Flame Cars | Status: Verified`,
+      summary: `Excel Spreadsheet "${filename}" parsed: Worksheets and data cells indexed.`,
+      rawTextContent: `EXCEL WORKBOOK: ${filename}\nStatus: Uploaded and indexed.`,
       keyFields: {
         'Workbook Type': 'Microsoft Excel Spreadsheet',
-        'Active Sheet': 'Compliance Records',
-        'Applicant': name,
-        'Vehicle': vrm,
+        'File Name': filename,
+        'Status': 'Uploaded & Indexed',
       },
     };
   }
 
-  // Standard Document Type Heuristics (Badge, DVLA, Vehicle Licence, Insurance, MOT, V5C)
-  switch (docType) {
-    case 'TFL_PHV_DRIVER_BADGE_FRONT': {
-      const badgeNum = applicant?.tflDriverBadgeNum || `${Math.floor(100000 + Math.random() * 900000)}`;
-      const expiry = `${futureYear}-08-15`;
-      return {
-        confidence: 0.97,
-        fullName: name,
-        licenceNumber: badgeNum,
-        expiryDate: expiry,
-        documentTypeDetected: 'TfL PHV Driver Badge (Front)',
-        issuingAuthority: 'Transport for London',
-        summary: `TfL PHV Driver Badge #${badgeNum} identified for ${name}. Valid until 15/08/${futureYear}.`,
-        rawTextContent: `TRANSPORT FOR LONDON - PRIVATE HIRE DRIVER\nBADGE NUMBER: ${badgeNum}\nFULL NAME: ${name.toUpperCase()}\nEXPIRY DATE: 15/08/${futureYear}\nISSUED UNDER THE PRIVATE HIRE VEHICLES (LONDON) ACT 1998`,
-        keyFields: {
-          'Full Legal Name': name,
-          'TfL Badge Number': badgeNum,
-          'Expiry Date': expiry,
-          'Issuing Authority': 'Transport for London',
-        },
-      };
-    }
+  // Standard Fallback when AI vision is not configured or unreadable:
+  // Strictly DOES NOT fabricate driver names or fake license numbers.
+  // Instead, prompts user/staff for manual entry while preserving any known applicant data.
+  const title = getDocReadableTitle(docType);
 
-    case 'TFL_PHV_DRIVER_BADGE_BACK': {
-      return {
-        confidence: 0.95,
-        documentTypeDetected: 'TfL PHV Driver Badge (Back)',
-        securityCheck: 'Hologram and barcode verified',
-        conditions: 'No restrictions',
-        summary: 'Reverse side security barcode, optical hologram, and licensing conditions verified.',
-        rawTextContent: `TfL PRIVATE HIRE DRIVER BADGE (REVERSE)\nBARCODE: *TFL${Math.floor(1000000 + Math.random() * 9000000)}*\nCONDITIONS: Operator dispatch authorized across Greater London.\nOfficial Transport for London Holographic Seal intact.`,
-        keyFields: {
-          'Security Feature': 'Optical Hologram + Barcode',
-          'Conditions': 'Standard London PHV Dispatch',
-          'Status': 'Valid & Unrestricted',
-        },
-      };
-    }
-
-    case 'DVLA_DRIVING_LICENCE_FRONT': {
-      const surname = name.split(' ').pop()?.toUpperCase() || 'DRIVER';
-      const licenceCode = `${surname.padEnd(5, '9').substring(0, 5)}${Math.floor(100000 + Math.random() * 900000)}AB99`;
-      const expiry = `${futureYear + 5}-04-20`;
-      return {
-        confidence: 0.98,
-        fullName: name,
-        licenceNumber: licenceCode,
-        expiryDate: expiry,
-        documentTypeDetected: 'DVLA Driving Licence (Photocard Front)',
-        categories: 'B (Car), B1, fklnp',
-        issuingAuthority: 'DVLA Swansea',
-        summary: `UK Driving Licence confirmed for ${name} (4b Expiry: 20/04/${futureYear + 5}, Category B).`,
-        rawTextContent: `GREAT BRITAIN DRIVING LICENCE\n1. ${surname}\n2. ${name}\n3. London, UK\n4a. 01/05/2015  4b. 20/04/${futureYear + 5}\n4d. ${licenceCode}\n5. UK DVLA SWANSEA\nCategory B Entitlement: Full`,
-        keyFields: {
-          'Driver Full Name': name,
-          'DVLA Licence Number': licenceCode,
-          '4b Valid Expiry': expiry,
-          'Vehicle Category': 'Category B (Car)',
-        },
-      };
-    }
-
-    case 'DVLA_DRIVING_LICENCE_BACK': {
-      return {
-        confidence: 0.96,
-        documentTypeDetected: 'DVLA Driving Licence (Photocard Back)',
-        summary: 'DVLA Category B vehicle entitlements, validity periods, and endorsement codes confirmed.',
-        rawTextContent: `DVLA DRIVING LICENCE REVERSE\nCategory B: Full (valid from 01/05/2015)\nCategory B1: Light vehicles (Quad / Trike)\nEndorsements: None (Clean Licence Record)\nMicroprint & Barcode: Valid`,
-        keyFields: {
-          'Entitlements': 'Category B, B1',
-          'Endorsements': 'None (Clean Licence)',
-          'Authority': 'DVLA',
-        },
-      };
-    }
-
-    case 'TFL_PHV_VEHICLE_LICENCE': {
-      const phvNum = `${Math.floor(20000 + Math.random() * 80000)}`;
-      const expiry = `${futureYear}-06-30`;
-      return {
-        confidence: 0.96,
-        vrm,
-        licenceNumber: phvNum,
-        vehicleMake: applicant?.make || 'Mercedes-Benz',
-        passengerSeats: 4,
-        expiryDate: expiry,
-        documentTypeDetected: 'TfL PHV Vehicle Licence Disc',
-        issuingAuthority: 'Transport for London PHV',
-        summary: `TfL Vehicle Licence Disc #${phvNum} for ${vrm}. Valid until 30/06/${futureYear}.`,
-        rawTextContent: `TRANSPORT FOR LONDON - PRIVATE HIRE VEHICLE LICENCE\nLICENCE NUMBER: ${phvNum}\nVRM: ${vrm}\nPASSENGER CAPACITY: 4 Persons\nMAKE/MODEL: ${applicant?.make || 'Mercedes-Benz'}\nEXPIRY DATE: 30/06/${futureYear}\nISSUED UNDER PHV (LONDON) REGULATIONS`,
-        keyFields: {
-          'Vehicle VRM': vrm,
-          'TfL PHV Disc #': phvNum,
-          'Seating Capacity': '4 Passengers',
-          'Disc Expiry': expiry,
-        },
-      };
-    }
-
-    case 'HIRE_REWARD_INSURANCE': {
-      const policyNum = `HR-LON-${Math.floor(100000 + Math.random() * 900000)}`;
-      const expiry = `${futureYear}-03-25`;
-      return {
-        confidence: 0.95,
-        policyNumber: policyNum,
-        vrm,
-        coverType: 'Private Hire / Hire & Reward',
-        insurer: 'Haven Insurance / Aviva UK',
-        expiryDate: expiry,
-        documentTypeDetected: 'Hire & Reward Insurance Certificate',
-        summary: `Hire & Reward Private Hire Insurance #${policyNum} covering ${vrm}. Expiry: 25/03/${futureYear}.`,
-        rawTextContent: `CERTIFICATE OF MOTOR INSURANCE - PRIVATE HIRE\nPOLICY NUMBER: ${policyNum}\nINSURED VEHICLE: ${vrm}\nPOLICYHOLDER: ${name}\nEFFECTIVE COVER: Hire & Reward / Private Hire Carriage of Passengers for Profit\nPERIOD OF INSURANCE: Valid until 25/03/${futureYear}\nUNDERWRITTEN BY: Haven Insurance / Aviva UK`,
-        keyFields: {
-          'Insurer': 'Haven Insurance / Aviva UK',
-          'Policy Number': policyNum,
-          'Cover Type': 'Hire & Reward Private Hire',
-          'Covered VRM': vrm,
-          'Insurance Expiry': expiry,
-        },
-      };
-    }
-
-    case 'MOT_CERTIFICATE': {
-      const motNum = `${Math.floor(100000000000 + Math.random() * 900000000000)}`;
-      const expiry = `${futureYear}-05-18`;
-      return {
-        confidence: 0.97,
-        motNumber: motNum,
-        vrm,
-        testResult: 'PASS',
-        expiryDate: expiry,
-        documentTypeDetected: 'MOT Test Certificate',
-        summary: `MOT Test Certificate PASS for ${vrm}. Test #${motNum}, valid until 18/05/${futureYear}.`,
-        rawTextContent: `MOT TEST CERTIFICATE (VT20)\nTEST NUMBER: ${motNum}\nVEHICLE REGISTRATION: ${vrm}\nTEST RESULT: PASS\nEXPIRY DATE: 18/05/${futureYear}\nODOMETER: 38,420 miles\nNO DANGEROUS OR MAJOR DEFECTS RECORDED`,
-        keyFields: {
-          'Test Result': 'PASS (No Major Defects)',
-          'Certificate Number': motNum,
-          'Vehicle VRM': vrm,
-          'MOT Expiry': expiry,
-        },
-      };
-    }
-
-    case 'V5C_LOGBOOK': {
-      const docRef = `${Math.floor(10000000000 + Math.random() * 90000000000)}`;
-      return {
-        confidence: 0.94,
-        vrm,
-        docRefNumber: docRef,
-        registeredKeeper: name,
-        documentTypeDetected: 'V5C Registration Certificate (Logbook)',
-        summary: `V5C Registration Certificate confirmed for ${vrm}. Registered Keeper matches ${name}.`,
-        rawTextContent: `DVLA UK VEHICLE REGISTRATION CERTIFICATE (V5C)\nDOCUMENT REF: ${docRef}\nREGISTRATION MARK: ${vrm}\nREGISTERED KEEPER: ${name.toUpperCase()}\nTAXATION CLASS: PRIVATE HIRE / CAR\nVIN / CHASSIS NUMBER: WDD213${Math.floor(100000000 + Math.random() * 900000000)}`,
-        keyFields: {
-          'Registered Keeper': name,
-          'Vehicle VRM': vrm,
-          'Doc Reference': docRef,
-          'Class': 'Private Hire / Car',
-        },
-      };
-    }
-
-    default:
-      return {
-        confidence: 0.92,
-        documentTypeDetected: `Document (${filename})`,
-        summary: `Document "${filename}" processed. Contents successfully indexed for regulatory compliance.`,
-        rawTextContent: `FILE VERIFICATION: ${filename}\nTimestamp: ${new Date().toISOString()}\nStatus: Verified and archived in Flame Cars database.`,
-        keyFields: {
-          'File Name': filename,
-          'Format': formatCategory.toUpperCase(),
-          'Status': 'Indexed',
-        },
-      };
-  }
+  return {
+    confidence: 0.5,
+    documentTypeDetected: title,
+    fullName: applicant?.legalName || undefined,
+    licenceNumber: applicant?.tflDriverBadgeNum || undefined,
+    vrm: applicant?.vrm || undefined,
+    expiryDate: undefined,
+    summary: `Document "${filename}" uploaded. Automatic AI reading was unable to extract fields with high confidence. Please verify or input expiry dates manually.`,
+    rawTextContent: `DOCUMENT: ${filename}\nAutomatic optical character recognition could not detect clear legible text.\nPlease inspect the preview and enter details manually.`,
+    keyFields: {
+      'File Name': filename,
+      'Extraction Status': 'Manual Review Required',
+    },
+  };
 }

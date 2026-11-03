@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { UploadedDoc, DocumentType } from '@/types/onboarding';
+import { areNamesCompatible } from '@/lib/nameCheck';
 
 interface DocumentPreviewModalProps {
   isOpen: boolean;
@@ -131,6 +132,14 @@ export default function DocumentPreviewModal({
   const badge = getFormatBadge();
   const aiData = doc.aiExtractedData;
 
+  const extractedDocName = (doc.type === 'V5C_LOGBOOK' ? aiData?.registeredKeeper : aiData?.fullName) as string | undefined;
+  const hasNameConflict = Boolean(
+    applicantName &&
+    extractedDocName &&
+    extractedDocName.trim().length > 1 &&
+    !areNamesCompatible(applicantName, extractedDocName)
+  );
+
   async function handleApproveClick() {
     if (!onApprove) return;
     setIsProcessingAction(true);
@@ -233,6 +242,24 @@ export default function DocumentPreviewModal({
                 <span className={`badge badge-${doc.status.toLowerCase()}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
                   {doc.status}
                 </span>
+                {hasNameConflict && (
+                  <span
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      background: '#fee2e2',
+                      color: '#b91c1c',
+                      border: '1px solid #fca5a5',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    ⚠️ Name Mismatch: &ldquo;{extractedDocName}&rdquo;
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                 {filename} • {(doc.fileSize / 1024).toFixed(1)} KB • Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
@@ -544,28 +571,28 @@ export default function DocumentPreviewModal({
                         <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '6px' }}>
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>HOLDER / POLICYHOLDER</div>
                           <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
-                            {aiData?.fullName || applicantName || 'Flame Cars Registered Driver'}
+                            {aiData?.fullName || applicantName || '—'}
                           </div>
                         </div>
 
                         <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '6px' }}>
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>DOCUMENT / POLICY NUMBER</div>
                           <div style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--text-primary)', marginTop: '4px' }}>
-                            {aiData?.policyNumber || aiData?.licenceNumber || 'FLM-LON-849102-UK'}
+                            {aiData?.policyNumber || aiData?.licenceNumber || '—'}
                           </div>
                         </div>
 
                         <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '6px' }}>
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>VEHICLE REGISTRATION (VRM)</div>
                           <div style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--text-primary)', marginTop: '4px' }}>
-                            {aiData?.vrm || 'LM71 XKD'}
+                            {aiData?.vrm || '—'}
                           </div>
                         </div>
 
                         <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '6px' }}>
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>EXPIRATION DATE</div>
                           <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--flame-600)', marginTop: '4px' }}>
-                            {doc.expiryDate || aiData?.expiryDate || '2027-04-10'}
+                            {doc.expiryDate || aiData?.expiryDate || '—'}
                           </div>
                         </div>
                       </div>

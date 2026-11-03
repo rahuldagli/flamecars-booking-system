@@ -6,6 +6,7 @@ interface Step0LandingProps {
   hasDraft?: boolean;
   draftName?: string;
   onResumeDraft?: () => void;
+  onStartFresh?: () => void;
 }
 
 export default function Step0Landing({
@@ -14,6 +15,7 @@ export default function Step0Landing({
   hasDraft,
   draftName,
   onResumeDraft,
+  onStartFresh,
 }: Step0LandingProps) {
   return (
     <div className="animate-fade-in" style={{ padding: '10px 0' }}>
@@ -43,14 +45,35 @@ export default function Step0Landing({
               Pick up right where you left off, or start a new application below.
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onResumeDraft}
-            className="btn-primary"
-            style={{ padding: '8px 18px', fontSize: '13px' }}
-          >
-            Resume Application →
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {onStartFresh && (
+              <button
+                type="button"
+                onClick={onStartFresh}
+                style={{
+                  padding: '8px 14px',
+                  fontSize: '12px',
+                  background: '#ffffff',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border-medium)',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+                title="Discard this saved draft and start a brand new application"
+              >
+                Discard & Start New
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onResumeDraft}
+              className="btn-primary"
+              style={{ padding: '8px 18px', fontSize: '13px' }}
+            >
+              Resume Application →
+            </button>
+          </div>
         </div>
       )}
 
@@ -179,7 +202,7 @@ export default function Step0Landing({
           className="btn-primary"
           style={{ width: '100%', maxWidth: '380px', padding: '16px' }}
         >
-          Start Driver Registration →
+          {hasDraft ? 'Start New Registration →' : 'Start Driver Registration →'}
         </button>
 
         <button

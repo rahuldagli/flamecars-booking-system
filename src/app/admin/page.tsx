@@ -719,6 +719,34 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
+            {/* Document Name Discrepancy Notice for Staff */}
+            {selectedApp.nameMismatchConfirmed && (
+              <div
+                style={{
+                  marginBottom: '16px',
+                  padding: '12px 16px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: '#fff7ed',
+                  border: '1px solid #fdba74',
+                  color: '#9a3412',
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                }}
+              >
+                <span style={{ fontSize: '20px' }}>⚠️</span>
+                <div>
+                  <div style={{ fontWeight: 800, color: '#c2410c' }}>
+                    Third-Party / Discrepant Document Name Acknowledged by Driver
+                  </div>
+                  <div style={{ fontSize: '12px', marginTop: '2px' }}>
+                    Driver Explanation: <strong>{selectedApp.nameMismatchReason || 'Confirmed third-party authorization'}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Applicant Summary Accordion */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '20px', fontSize: '13px' }}>
               <div style={{ padding: '14px', background: '#ffffff', border: '1px solid var(--border-medium)', borderRadius: 'var(--radius-sm)', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)' }}>

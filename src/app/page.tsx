@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { DriverApplication, INITIAL_APPLICATION } from '@/types/onboarding';
-import { loadLocalDraft, saveLocalDraft } from '@/lib/storage';
+import { loadLocalDraft, saveLocalDraft, clearLocalDraft } from '@/lib/storage';
 import StepProgressBar from '@/components/StepProgressBar';
 import ResumeModal from '@/components/ResumeModal';
 import Step0Landing from '@/components/steps/Step0Landing';
@@ -66,6 +66,19 @@ export default function OnboardingPage() {
     });
   }
 
+  // Discard saved draft and start completely fresh application
+  function handleStartNew() {
+    clearLocalDraft();
+    const freshApp: DriverApplication = {
+      ...INITIAL_APPLICATION,
+      id: 'app_' + Math.random().toString(36).substring(2, 11),
+      currentStep: 1,
+      updatedAt: new Date().toISOString(),
+    };
+    setApp(freshApp);
+    saveLocalDraft(freshApp);
+  }
+
   function handleResume(resumedApp: DriverApplication) {
     setApp(resumedApp);
     saveLocalDraft(resumedApp);
@@ -78,6 +91,8 @@ export default function OnboardingPage() {
       </div>
     );
   }
+
+  const hasDraft = !!(app.legalName || app.mobileNumber);
 
   return (
     <div className="container" style={{ paddingTop: '24px', maxWidth: '820px' }}>
@@ -125,9 +140,10 @@ export default function OnboardingPage() {
       {/* Step Router */}
       {app.currentStep === 0 && (
         <Step0Landing
-          onStart={() => updateApp({ currentStep: 1 })}
+          onStart={hasDraft ? handleStartNew : () => updateApp({ currentStep: 1 })}
+          onStartFresh={handleStartNew}
           onResumeClick={() => setIsResumeModalOpen(true)}
-          hasDraft={!!(app.legalName || app.mobileNumber)}
+          hasDraft={hasDraft}
           draftName={app.legalName}
           onResumeDraft={() => updateApp({ currentStep: 1 })}
         />
