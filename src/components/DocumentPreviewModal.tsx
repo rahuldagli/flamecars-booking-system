@@ -810,8 +810,8 @@ export default function DocumentPreviewModal({
                     style={{
                       padding: '16px 20px',
                       borderRadius: 'var(--radius-md)',
-                      background: 'var(--flame-50)',
-                      border: '1px solid var(--border-flame)',
+                      background: aiData.apiError ? '#fef2f2' : 'var(--flame-50)',
+                      border: aiData.apiError ? '1px solid #fecaca' : '1px solid var(--border-flame)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -820,19 +820,34 @@ export default function DocumentPreviewModal({
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: '12px', color: 'var(--flame-600)', fontWeight: 700, textTransform: 'uppercase' }}>
-                        AI Content Verification
+                      <div style={{ fontSize: '12px', color: aiData.apiError ? '#b91c1c' : 'var(--flame-600)', fontWeight: 700, textTransform: 'uppercase' }}>
+                        {aiData.apiError ? 'AI Vision API Error' : 'AI Content Verification'}
                       </div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
-                        {aiData.summary || 'Document details successfully verified and extracted.'}
+                      <div
+                        style={{
+                          fontSize: '14px',
+                          fontWeight: 600,
+                          color: aiData.apiError ? '#7f1d1d' : 'var(--text-primary)',
+                          marginTop: '2px',
+                          fontFamily: aiData.apiError ? 'monospace' : 'inherit',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {aiData.apiError || aiData.summary || 'Document details successfully verified and extracted.'}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span
                         className="badge badge-approved"
-                        style={{ fontSize: '12px', padding: '4px 10px', background: '#dcfce7', color: '#15803d' }}
+                        style={{
+                          fontSize: '12px',
+                          padding: '4px 10px',
+                          background: aiData.apiError ? '#fee2e2' : '#dcfce7',
+                          color: aiData.apiError ? '#b91c1c' : '#15803d',
+                          border: aiData.apiError ? '1px solid #fca5a5' : 'none',
+                        }}
                       >
-                        ✓ {Math.round((aiData.confidence || 0.95) * 100)}% Confidence
+                        {aiData.apiError ? 'API Error' : `✓ ${Math.round((aiData.confidence || 0.95) * 100)}% Confidence`}
                       </span>
                       {onTriggerAiExtract && (
                         <button
@@ -977,7 +992,9 @@ export default function DocumentPreviewModal({
                 whiteSpace: 'pre-wrap',
               }}
             >
-              {aiData?.rawTextContent || `[RAW DOCUMENT TRANSCRIPT]\nFile: ${filename}\nUploaded: ${new Date(doc.uploadedAt).toISOString()}\nStatus: Verified\nSummary: ${aiData?.summary || 'Standard compliance document indexed.'}`}
+              {aiData?.apiError
+                ? `DOCUMENT: ${filename}\n[AI OCR API ERROR]\n${aiData.apiError}\n\nTimestamp: ${new Date(doc.uploadedAt).toISOString()}\n(Error logged directly to Developer Tools Console)`
+                : aiData?.rawTextContent || `[RAW DOCUMENT TRANSCRIPT]\nFile: ${filename}\nUploaded: ${new Date(doc.uploadedAt).toISOString()}\nStatus: Verified\nSummary: ${aiData?.summary || 'Standard compliance document indexed.'}`}
             </div>
           )}
         </div>

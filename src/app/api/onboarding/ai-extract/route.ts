@@ -133,26 +133,46 @@ export async function POST(req: Request) {
     const openRouterKey = getOpenRouterApiKey();
     const preferredModel = getOpenRouterModel();
     let visionResult: Record<string, unknown> | null = null;
+    let apiError: string | null = null;
+
+    // Transcode AVIF/HEIC image on server if sharp is available
+    let processedDataUrl = dataUrl;
+    if (dataUrl && (dataUrl.startsWith('data:image/') || dataUrl.startsWith('data:application/pdf'))) {
+      processedDataUrl = await normalizeImageForVision(dataUrl, filename);
+    }
 
     // 1. Multimodal Vision OCR via OpenRouter if key is available and file is image/PDF
-    if (openRouterKey && dataUrl && (dataUrl.startsWith('data:image/') || dataUrl.startsWith('data:application/pdf'))) {
+    if (openRouterKey && processedDataUrl && (processedDataUrl.startsWith('data:image/') || processedDataUrl.startsWith('data:application/pdf'))) {
       try {
-        visionResult = await callOpenRouterVision(openRouterKey, preferredModel, docType, dataUrl);
+        visionResult = await callOpenRouterVision(openRouterKey, preferredModel, docType, processedDataUrl);
         if (visionResult) {
           console.log('[AI OCR ENGINE] Vision extraction succeeded:', visionResult);
         }
-      } catch (err) {
-        console.warn('[AI OCR ENGINE] Primary OpenRouter vision attempt failed:', err);
-        // Secondary fallback model attempt
+      } catch (err: any) {
+        const primaryErrMsg = err?.message || String(err);
+        console.error('[AI OCR ENGINE] Primary OpenRouter vision attempt failed:', primaryErrMsg);
+        apiError = primaryErrMsg;
+
+        // Secondary fallback model attempt (openai/gpt-4o-mini)
         try {
-          visionResult = await callOpenRouterVision(openRouterKey, 'google/gemini-2.0-flash-001', docType, dataUrl);
-        } catch (fallbackErr) {
-          console.warn('[AI OCR ENGINE] Fallback vision model failed:', fallbackErr);
+          visionResult = await callOpenRouterVision(openRouterKey, 'openai/gpt-4o-mini', docType, processedDataUrl);
+          if (visionResult) {
+            console.log('[AI OCR ENGINE] Fallback vision model succeeded');
+            apiError = null; // Clear if fallback succeeded
+          }
+        } catch (fallbackErr: any) {
+          const fallbackErrMsg = fallbackErr?.message || String(fallbackErr);
+          console.error('[AI OCR ENGINE] Fallback vision model also failed:', fallbackErrMsg);
+          apiError = fallbackErrMsg;
         }
       }
     } else {
       if (!openRouterKey) {
-        console.warn('[AI OCR ENGINE] OPENROUTER_API_KEY is not configured in .env.local');
+        apiError = 'OPENROUTER_API_KEY is not configured in server environment variables (.env.local)';
+        console.error('[AI OCR ENGINE]', apiError);
+      } else if (!dataUrl) {
+        apiError = 'No document file data URL received for AI extraction';
+        console.error('[AI OCR ENGINE]', apiError);
       }
     }
 
@@ -205,7 +225,8 @@ export async function POST(req: Request) {
       };
     } else {
       // Non-vision or fallback extraction (CSV / Spreadsheet parser or manual entry requirement)
-      extractedData = generateComprehensiveExtraction(docType, filename, dataUrl, currentAppData);
+      const fallbackReason = apiError ? 'API_ERROR' : (!openRouterKey ? 'API_KEY_MISSING' : 'VISION_UNAVAILABLE');
+      extractedData = generateComprehensiveExtraction(docType, filename, dataUrl, currentAppData, fallbackReason, apiError);
     }
 
     extractedData.extractedAt = new Date().toISOString();
@@ -260,7 +281,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      success: true,
+      success: !apiError,
+      apiError: apiError || undefined,
       extractedData,
     });
   } catch (error) {
@@ -416,6 +438,50 @@ Format your response strictly as valid JSON with keys:
 Return ONLY raw JSON, with no markdown code blocks or backticks.`;
 }
 
+// Helper to parse detailed error messages from OpenRouter response
+function parseOpenRouterErrorMessage(status: number, errorText: string): string {
+  try {
+    const parsed = JSON.parse(errorText);
+    if (parsed.error?.metadata?.raw) {
+      try {
+        const rawObj = JSON.parse(parsed.error.metadata.raw);
+        if (rawObj.error?.message) {
+          return `OpenRouter HTTP ${status}: ${rawObj.error.message}`;
+        }
+      } catch {}
+    }
+    if (parsed.error?.message) {
+      return `OpenRouter HTTP ${status}: ${parsed.error.message}`;
+    }
+  } catch {}
+  return `OpenRouter HTTP ${status}: ${errorText.slice(0, 300)}`;
+}
+
+// Normalize / transcode unsupported images (like AVIF or HEIC) to JPEG using sharp if available
+async function normalizeImageForVision(dataUrl: string, filename: string): Promise<string> {
+  const lowerFile = filename.toLowerCase();
+  const isAvif = dataUrl.startsWith('data:image/avif') || lowerFile.endsWith('.avif');
+  const isHeic = dataUrl.startsWith('data:image/heic') || dataUrl.startsWith('data:image/heif') || /\.(heic|heif)$/i.test(lowerFile);
+
+  if (!isAvif && !isHeic) return dataUrl;
+
+  try {
+    // Dynamic require so edge/non-node runtimes don't break at build time
+    const sharp = require('sharp');
+    const commaIdx = dataUrl.indexOf(',');
+    if (commaIdx !== -1) {
+      const base64Data = dataUrl.substring(commaIdx + 1);
+      const inputBuffer = Buffer.from(base64Data, 'base64');
+      const jpegBuffer = await sharp(inputBuffer).jpeg({ quality: 90 }).toBuffer();
+      console.log(`[AI OCR ENGINE] Successfully transcoded ${isAvif ? 'AVIF' : 'HEIC'} to JPEG (${jpegBuffer.length} bytes)`);
+      return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`;
+    }
+  } catch (convErr: any) {
+    console.warn('[AI OCR ENGINE] Transcoding with sharp failed or not available:', convErr?.message || convErr);
+  }
+  return dataUrl;
+}
+
 // OpenRouter Multimodal Vision API Caller
 async function callOpenRouterVision(apiKey: string, model: string, docType: DocumentType, dataUrl: string): Promise<Record<string, unknown> | null> {
   const prompt = buildDocumentVisionPrompt(docType);
@@ -451,8 +517,9 @@ async function callOpenRouterVision(apiKey: string, model: string, docType: Docu
 
   if (!res.ok) {
     const errorText = await res.text();
-    console.warn(`[OpenRouter Error] HTTP ${res.status}:`, errorText);
-    throw new Error(`OpenRouter returned status ${res.status}: ${errorText}`);
+    const cleanError = parseOpenRouterErrorMessage(res.status, errorText);
+    console.error(`[AI OCR ENGINE API Error] HTTP ${res.status}:`, cleanError);
+    throw new Error(cleanError);
   }
 
   const json = await res.json();
@@ -482,7 +549,9 @@ function generateComprehensiveExtraction(
   docType: DocumentType,
   filename: string,
   dataUrl?: string,
-  applicant?: ExtractRequest['currentAppData']
+  applicant?: ExtractRequest['currentAppData'],
+  reason?: 'API_KEY_MISSING' | 'VISION_UNAVAILABLE' | 'API_ERROR',
+  apiError?: string | null
 ): Record<string, unknown> {
   const lowerFile = filename.toLowerCase();
 
@@ -543,23 +612,43 @@ function generateComprehensiveExtraction(
     };
   }
 
-  // Standard Fallback when AI vision is not configured or unreadable:
+  // Standard Fallback when AI vision is not configured, errors, or is unreadable:
   // Strictly DOES NOT fabricate driver names or fake license numbers.
   // Instead, prompts user/staff for manual entry while preserving any known applicant data.
   const title = getDocReadableTitle(docType);
 
+  const isKeyMissing = reason === 'API_KEY_MISSING';
+  let summary: string;
+  let rawTextContent: string;
+  let extractionStatus = 'Manual Review Required';
+
+  if (apiError) {
+    summary = `AI OCR API Error on "${filename}": ${apiError}`;
+    rawTextContent = `DOCUMENT: ${filename}\n[AI OCR API ERROR]\n${apiError}\n\nPlease inspect the preview and enter details manually.`;
+    extractionStatus = 'API Error';
+  } else if (isKeyMissing) {
+    summary = `Document "${filename}" uploaded. AI OCR is not configured (OPENROUTER_API_KEY environment variable is missing on the server). Please enter details manually.`;
+    rawTextContent = `DOCUMENT: ${filename}\nAI Vision OCR service is not active because OPENROUTER_API_KEY is not set in the server environment variables.\nPlease set OPENROUTER_API_KEY in your hosting dashboard (e.g. Cloudflare Pages / Vercel) or enter details manually.`;
+    extractionStatus = 'API Key Not Set';
+  } else {
+    summary = `Document "${filename}" uploaded. Automatic AI reading was unable to extract fields with high confidence. Please verify or input expiry dates manually.`;
+    rawTextContent = `DOCUMENT: ${filename}\nAutomatic optical character recognition could not detect clear legible text.\nPlease inspect the preview and enter details manually.`;
+  }
+
   return {
     confidence: 0.5,
+    apiError: apiError || undefined,
     documentTypeDetected: title,
     fullName: applicant?.legalName || undefined,
     licenceNumber: applicant?.tflDriverBadgeNum || undefined,
     vrm: applicant?.vrm || undefined,
     expiryDate: undefined,
-    summary: `Document "${filename}" uploaded. Automatic AI reading was unable to extract fields with high confidence. Please verify or input expiry dates manually.`,
-    rawTextContent: `DOCUMENT: ${filename}\nAutomatic optical character recognition could not detect clear legible text.\nPlease inspect the preview and enter details manually.`,
+    summary,
+    rawTextContent,
     keyFields: {
       'File Name': filename,
-      'Extraction Status': 'Manual Review Required',
+      'Extraction Status': extractionStatus,
+      ...(apiError ? { 'API Error Details': apiError } : {}),
     },
   };
 }

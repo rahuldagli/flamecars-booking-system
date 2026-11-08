@@ -35,6 +35,7 @@ export interface UploadedDoc {
   isAnalyzing?: boolean;
   aiExtractedData?: {
     confidence?: number;
+    apiError?: string;
     fullName?: string;
     licenceNumber?: string;
     expiryDate?: string;

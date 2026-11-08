@@ -903,6 +903,19 @@ export default function AdminDashboardPage() {
               }),
             });
             const data = await res.json();
+            if (data.apiError || !res.ok || data.extractedData?.apiError) {
+              const apiErr = data.apiError || data.extractedData?.apiError || data.error || `HTTP ${res.status}`;
+              console.error(`[AI OCR API ERROR] Staff inspect ${doc.filename} (${docType}):`, apiErr);
+              console.error('[AI OCR API Details]:', {
+                filename: doc.filename,
+                docType,
+                httpStatus: res.status,
+                apiError: apiErr,
+                fullResponse: data,
+              });
+            } else {
+              console.log(`[AI OCR SUCCESS] Staff inspect ${doc.filename}:`, data.extractedData);
+            }
             if (res.ok && data.extractedData) {
               const updatedDoc = {
                 ...doc,

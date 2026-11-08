@@ -12,6 +12,35 @@ interface Step3DocumentsProps {
   onBack: () => void;
 }
 
+// Helper to convert AVIF/HEIC images to JPEG in modern browsers via HTMLCanvasElement
+// Ensures wide compatibility with LLM multimodal vision APIs (which only accept JPEG, PNG, GIF, WEBP)
+async function transcodeAvifToJpeg(dataUrl: string): Promise<string> {
+  if (typeof window === 'undefined') return dataUrl;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const jpeg = canvas.toDataURL('image/jpeg', 0.92);
+          resolve(jpeg);
+          return;
+        }
+      } catch (err) {
+        console.warn('[AI OCR] Canvas transcode error:', err);
+      }
+      resolve(dataUrl);
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 export default function Step3Documents({ data, onChange, onNext, onBack }: Step3DocumentsProps) {
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<'all' | 'driver' | 'vehicle'>('all');
@@ -27,7 +56,16 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
 
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
+      let dataUrl = e.target?.result as string;
+
+      // Transcode AVIF on client via canvas if needed for maximum compatibility
+      if (file.type === 'image/avif' || file.name.toLowerCase().endsWith('.avif')) {
+        try {
+          dataUrl = await transcodeAvifToJpeg(dataUrl);
+        } catch (transcodeErr) {
+          console.warn('[AI OCR] Client AVIF transcode fallback:', transcodeErr);
+        }
+      }
       const docId = 'doc_' + Math.random().toString(36).substring(2, 9);
 
       // Create document entry in analyzing state
@@ -74,6 +112,22 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
         });
 
         const resJson = await res.json();
+
+        // Directly log API error or success to the console
+        if (resJson.apiError || !res.ok || resJson.extractedData?.apiError) {
+          const apiErr = resJson.apiError || resJson.extractedData?.apiError || resJson.error || `HTTP ${res.status}`;
+          console.error(`[AI OCR API ERROR] File "${file.name}" (${type}):`, apiErr);
+          console.error('[AI OCR API Details]:', {
+            filename: file.name,
+            docType: type,
+            httpStatus: res.status,
+            apiError: apiErr,
+            fullResponse: resJson,
+          });
+        } else {
+          console.log(`[AI OCR SUCCESS] File "${file.name}":`, resJson.extractedData);
+        }
+
         if (res.ok && resJson.extractedData) {
           const aiData = resJson.extractedData;
           const detectedExpiry = aiData.expiryDate || initialDoc.expiryDate;
@@ -145,7 +199,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
           });
         }
       } catch (aiErr) {
-        console.error('AI extraction error:', aiErr);
+        console.error(`[AI OCR NETWORK / SYSTEM ERROR] File "${file.name}" (${type}):`, aiErr);
         onChange({
           documents: {
             ...data.documents,
@@ -194,6 +248,21 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
       });
 
       const resJson = await res.json();
+
+      // Directly log API error or success to the console
+      if (resJson.apiError || !res.ok || resJson.extractedData?.apiError) {
+        const apiErr = resJson.apiError || resJson.extractedData?.apiError || resJson.error || `HTTP ${res.status}`;
+        console.error(`[AI OCR API ERROR] File "${doc.filename}" (${type}):`, apiErr);
+        console.error('[AI OCR API Details]:', {
+          filename: doc.filename,
+          docType: type,
+          httpStatus: res.status,
+          apiError: apiErr,
+          fullResponse: resJson,
+        });
+      } else {
+        console.log(`[AI OCR SUCCESS] File "${doc.filename}":`, resJson.extractedData);
+      }
       if (res.ok && resJson.extractedData) {
         const aiData = resJson.extractedData;
         const detectedExpiry = aiData.expiryDate || doc.expiryDate;
@@ -591,16 +660,19 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                       </div>
                     ) : aiData ? (
                       (() => {
-                        const isHighConf = (aiData.confidence || 0) >= 0.75;
+                        const hasApiError = Boolean(aiData.apiError);
+                        const isHighConf = !hasApiError && (aiData.confidence || 0) >= 0.75;
                         return (
                           <div
                             style={{
                               marginTop: '14px',
                               padding: '16px',
                               borderRadius: 'var(--radius-md)',
-                              background: isHighConf ? '#f0fdf4' : '#fffbeb',
-                              border: isHighConf ? '1px solid #bbf7d0' : '1px solid #fde68a',
-                              boxShadow: isHighConf
+                              background: hasApiError ? '#fef2f2' : isHighConf ? '#f0fdf4' : '#fffbeb',
+                              border: hasApiError ? '1px solid #fecaca' : isHighConf ? '1px solid #bbf7d0' : '1px solid #fde68a',
+                              boxShadow: hasApiError
+                                ? '0 2px 5px rgba(239, 68, 68, 0.08)'
+                                : isHighConf
                                 ? '0 2px 5px rgba(16, 185, 129, 0.08)'
                                 : '0 2px 5px rgba(245, 158, 11, 0.08)',
                             }}
@@ -608,45 +680,67 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
                             {/* Header Banner */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '16px' }}>{isHighConf ? '✨' : '⚠️'}</span>
-                                <span style={{ fontSize: '13px', fontWeight: 800, color: isHighConf ? '#166534' : '#92400e' }}>
-                                  {isHighConf ? 'AI Extracted Details • ' : 'Manual Verification • '}
+                                <span style={{ fontSize: '16px' }}>{hasApiError ? '🚨' : isHighConf ? '✨' : '⚠️'}</span>
+                                <span style={{ fontSize: '13px', fontWeight: 800, color: hasApiError ? '#991b1b' : isHighConf ? '#166534' : '#92400e' }}>
+                                  {hasApiError ? 'AI OCR API Error • ' : isHighConf ? 'AI Extracted Details • ' : 'Manual Verification • '}
                                   {aiData.documentTypeDetected || config.title}
                                 </span>
                                 <span
                                   style={{
                                     fontSize: '11px',
                                     fontWeight: 700,
-                                    background: isHighConf ? '#dcfce7' : '#fef3c7',
-                                    color: isHighConf ? '#15803d' : '#b45309',
+                                    background: hasApiError ? '#fee2e2' : isHighConf ? '#dcfce7' : '#fef3c7',
+                                    color: hasApiError ? '#b91c1c' : isHighConf ? '#15803d' : '#b45309',
                                     padding: '2px 8px',
                                     borderRadius: '12px',
-                                    border: isHighConf ? '1px solid #86efac' : '1px solid #fcd34d',
+                                    border: hasApiError ? '1px solid #fca5a5' : isHighConf ? '1px solid #86efac' : '1px solid #fcd34d',
                                   }}
                                 >
-                                  {Math.round((aiData.confidence || 0.5) * 100)}% Confidence
+                                  {hasApiError ? 'API Error' : `${Math.round((aiData.confidence || 0.5) * 100)}% Confidence`}
                                 </span>
                               </div>
-                              <span style={{ fontSize: '11px', color: isHighConf ? '#16a34a' : '#d97706', fontWeight: 700 }}>
-                                {isHighConf ? '✓ Saved to Database' : 'Manual entry / check'}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '11px', color: hasApiError ? '#dc2626' : isHighConf ? '#16a34a' : '#d97706', fontWeight: 700 }}>
+                                  {hasApiError ? 'Logged in Console (F12)' : isHighConf ? '✓ Saved to Database' : 'Manual entry / check'}
+                                </span>
+                                {hasApiError && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTriggerAiExtract(config.type)}
+                                    className="btn-secondary"
+                                    style={{ padding: '3px 8px', fontSize: '11px', background: '#ffffff', color: '#dc2626', border: '1px solid #fca5a5' }}
+                                  >
+                                    🔄 Retry
+                                  </button>
+                                )}
+                              </div>
                             </div>
 
-                            {/* Summary description */}
+                            {/* Summary / API Error description */}
                             {aiData.summary && (
                               <div
                                 style={{
                                   fontSize: '12px',
-                                  color: isHighConf ? '#166534' : '#92400e',
+                                  color: hasApiError ? '#7f1d1d' : isHighConf ? '#166534' : '#92400e',
                                   marginBottom: '12px',
                                   lineHeight: 1.5,
-                                  background: 'rgba(255, 255, 255, 0.75)',
-                                  padding: '8px 12px',
+                                  background: 'rgba(255, 255, 255, 0.85)',
+                                  padding: '10px 14px',
                                   borderRadius: '6px',
-                                  border: isHighConf ? '1px solid #dcfce7' : '1px solid #fde68a',
+                                  border: hasApiError ? '1px solid #fecaca' : isHighConf ? '1px solid #dcfce7' : '1px solid #fde68a',
+                                  fontFamily: hasApiError ? 'monospace' : 'inherit',
+                                  whiteSpace: hasApiError ? 'pre-wrap' : 'normal',
+                                  wordBreak: 'break-word',
                                 }}
                               >
-                                {aiData.summary}
+                                {hasApiError ? (
+                                  <div>
+                                    <strong>API Error Details:</strong>
+                                    <div style={{ marginTop: '4px' }}>{aiData.apiError || aiData.summary}</div>
+                                  </div>
+                                ) : (
+                                  aiData.summary
+                                )}
                               </div>
                             )}
 
