@@ -610,13 +610,24 @@ export default function AdminDashboardPage() {
         <div className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-lg)' }}>
           {/* Search & Filter */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-            <input
-              type="text"
-              placeholder="Search by name, VRM, phone, or FLM ref..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ fontSize: '13px', padding: '10px 12px' }}
-            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                placeholder="Search by name, VRM, phone, or FLM ref..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ fontSize: '13px', padding: '10px 12px', flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={loadApplications}
+                className="btn-secondary"
+                style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}
+                title="Reload latest applications"
+              >
+                🔄 Refresh
+              </button>
+            </div>
 
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {['ALL', 'SUBMITTED', 'ACTION_REQUIRED', 'ACTIVE'].map((st) => (

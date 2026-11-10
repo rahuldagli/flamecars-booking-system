@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { applicationStore } from '@/lib/serverStore';
 import { DriverApplication } from '@/types/onboarding';
 import { detectNameDiscrepancies } from '@/lib/nameCheck';
+import { syncDriverToTbms } from '@/lib/tbms';
 
 export async function POST(req: Request) {
   try {
@@ -41,6 +42,25 @@ export async function POST(req: Request) {
     application.submittedAt = new Date().toISOString();
     application.currentStep = 6;
 
+    // Automatically sync driver into TBMS Dispatch System on new registration
+    try {
+      const tbmsResult = await syncDriverToTbms(application);
+      if (tbmsResult.success && tbmsResult.driverId) {
+        application.tbmsDriverId = tbmsResult.driverId;
+        application.tbmsSyncStatus = 'SYNCED';
+        application.tbmsSyncError = undefined;
+        console.log(`[TBMS AUTO-SYNC] Successfully created driver in TBMS (Driver ID: ${tbmsResult.driverId})`);
+      } else {
+        application.tbmsSyncStatus = 'FAILED';
+        application.tbmsSyncError = tbmsResult.error;
+        console.warn(`[TBMS AUTO-SYNC] Sync deferred:`, tbmsResult.error);
+      }
+    } catch (tbmsErr: any) {
+      application.tbmsSyncStatus = 'FAILED';
+      application.tbmsSyncError = tbmsErr?.message || 'TBMS connection failed';
+      console.error('[TBMS AUTO-SYNC] Exception:', tbmsErr);
+    }
+
     const saved = applicationStore.save(application);
 
     return NextResponse.json({
@@ -48,6 +68,8 @@ export async function POST(req: Request) {
       message: 'Application submitted successfully',
       application: saved,
       referenceNumber: saved.referenceNumber,
+      tbmsSyncStatus: saved.tbmsSyncStatus,
+      tbmsDriverId: saved.tbmsDriverId,
     });
   } catch (error) {
     console.error('Submission Error:', error);
