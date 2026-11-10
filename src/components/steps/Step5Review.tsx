@@ -87,7 +87,7 @@ export default function Step5Review({
         </h2>
 
         <p style={{ color: 'var(--text-secondary)', fontSize: '15px', maxWidth: '520px', margin: '0 auto 24px auto', lineHeight: 1.6 }}>
-          Thank you, <strong>{data.legalName}</strong>. Your driver onboarding file has been queued for compliance review.
+          Thank you, <strong>{data.legalName}</strong>. Your driver onboarding file has been queued for compliance review. A confirmation email has been dispatched with your preview and modify link.
         </p>
 
         {/* Reference Code Card */}
@@ -146,7 +146,15 @@ export default function Step5Review({
           </ol>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setSubmittedRef(null)}
+            className="btn-secondary"
+            style={{ padding: '10px 18px', fontSize: '13px' }}
+          >
+            ← Review &amp; Modify Details
+          </button>
           <a href="/admin" className="btn-secondary" style={{ textDecoration: 'none' }}>
             View in Staff Portal →
           </a>
@@ -157,10 +165,55 @@ export default function Step5Review({
 
   return (
     <div className="glass-panel animate-fade-in" style={{ padding: '28px' }}>
+      {/* Submitted Status & Preview Banner */}
+      {data.referenceNumber && (
+        <div
+          style={{
+            padding: '16px 20px',
+            borderRadius: 'var(--radius-md)',
+            background: data.status === 'ACTIVE' ? 'var(--success-bg)' : '#fff7ed',
+            border: data.status === 'ACTIVE' ? '1px solid var(--success)' : '1px solid #fdba74',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Application Status:
+              </span>
+              <span className={`badge ${data.status === 'ACTIVE' ? 'badge-active' : 'badge-submitted'}`}>
+                {data.status || 'SUBMITTED'}
+              </span>
+              {data.tbmsDriverId && (
+                <span style={{ fontSize: '11px', background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                  TBMS ID: #{data.tbmsDriverId}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '13px', color: '#7c2d12' }}>
+              Ref: <strong style={{ fontFamily: 'monospace' }}>{data.referenceNumber}</strong>
+              {data.submittedAt && <span> &bull; Submitted: {new Date(data.submittedAt).toLocaleDateString()}</span>}
+            </div>
+          </div>
+          <div style={{ fontSize: '12px', color: '#9a3412', background: '#ffffff', padding: '6px 12px', borderRadius: '6px', border: '1px solid #fed7aa' }}>
+            ✏️ Preview mode: Click <strong>Edit</strong> on any section below to update your information.
+          </div>
+        </div>
+      )}
+
       <div style={{ marginBottom: '22px' }}>
-        <h2 style={{ fontSize: '22px', marginBottom: '6px' }}>6. Review & Submit Application</h2>
+        <h2 style={{ fontSize: '22px', marginBottom: '6px' }}>
+          {data.referenceNumber ? '6. Preview & Modify Application' : '6. Review & Submit Application'}
+        </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-          Please verify your details before submitting your onboarding application for compliance review.
+          {data.referenceNumber
+            ? 'Review your submitted application details below. Click Edit on any section to make updates, then submit to save.'
+            : 'Please verify your details before submitting your onboarding application for compliance review.'}
         </p>
       </div>
 
@@ -506,7 +559,11 @@ export default function Step5Review({
           className="btn-primary"
           style={{ padding: '16px 32px' }}
         >
-          {submitting ? 'Submitting Application...' : 'Submit Application for Review ✓'}
+          {submitting
+            ? 'Saving & Updating...'
+            : data.referenceNumber
+            ? 'Save & Resubmit Updates ✓'
+            : 'Submit Application for Review ✓'}
         </button>
       </div>
     </div>

@@ -18,11 +18,45 @@ export default function OnboardingPage() {
   const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string>('');
+  const [loadError, setLoadError] = useState<string>('');
+  const [isLoadingRef, setIsLoadingRef] = useState(false);
 
-  // Hydrate from localStorage on client mount
+  // Hydrate from URL query or localStorage on client mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const isHome = params.get('home') === '1';
+    const refParam = params.get('ref') || params.get('reference') || params.get('id');
+
+    // If driver clicked a preview/modify link from email: ?ref=FLM-DRV-...
+    if (refParam) {
+      setIsLoadingRef(true);
+      fetch(`/api/onboarding/draft?identifier=${encodeURIComponent(refParam.trim())}`)
+        .then(async (res) => {
+          if (!res.ok) {
+            throw new Error('Application not found');
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (data && data.application) {
+            setApp({ ...data.application, currentStep: 6 });
+            saveLocalDraft(data.application);
+            setSaveStatus('Application loaded from link');
+          } else {
+            setLoadError(`Application "${refParam}" not found. You can resume with your mobile number.`);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load application by ref:', err);
+          setLoadError(`Could not find application "${refParam}". Please check your link or resume with your mobile number.`);
+        })
+        .finally(() => {
+          setIsLoadingRef(false);
+          setIsHydrated(true);
+        });
+      return;
+    }
+
     const saved = loadLocalDraft();
 
     if (isHome) {
@@ -84,10 +118,11 @@ export default function OnboardingPage() {
     saveLocalDraft(resumedApp);
   }
 
-  if (!isHydrated) {
+  if (isLoadingRef || !isHydrated) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <div style={{ color: 'var(--flame-600)', fontSize: '16px' }}>Loading Flame Cars Onboarding...</div>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '60vh', gap: '14px' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid #fed7aa', borderTopColor: '#ea580c', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <div style={{ color: 'var(--flame-600)', fontSize: '15px', fontWeight: 600 }}>Loading Flame Cars Application...</div>
       </div>
     );
   }
@@ -96,6 +131,33 @@ export default function OnboardingPage() {
 
   return (
     <div className="container" style={{ paddingTop: '24px', maxWidth: '820px' }}>
+      {/* Alert if link could not be loaded */}
+      {loadError && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--danger-bg)',
+            color: 'var(--danger)',
+            fontSize: '13px',
+            marginBottom: '16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <span>{loadError}</span>
+          <button
+            onClick={() => setIsResumeModalOpen(true)}
+            className="btn-secondary"
+            style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
+          >
+            Resume Manually
+          </button>
+        </div>
+      )}
+
       {/* Top Status Bar (Step > 0) */}
       {app.currentStep > 0 && (
         <div

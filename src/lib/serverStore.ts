@@ -87,7 +87,18 @@ export const applicationStore = {
 
   save(app: DriverApplication): DriverApplication {
     if (!app.id) {
-      app.id = 'app_' + Math.random().toString(36).substring(2, 10);
+      if (app.referenceNumber || app.mobileNumber) {
+        const existing = this.get(app.referenceNumber || app.mobileNumber);
+        if (existing) {
+          app.id = existing.id;
+          if (!app.referenceNumber) {
+            app.referenceNumber = existing.referenceNumber;
+          }
+        }
+      }
+      if (!app.id) {
+        app.id = 'app_' + Math.random().toString(36).substring(2, 10);
+      }
     }
     if (!app.referenceNumber) {
       const year = new Date().getFullYear();

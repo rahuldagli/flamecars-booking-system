@@ -111,6 +111,11 @@ export interface DriverApplication {
   tbmsSyncStatus?: 'NOT_SYNCED' | 'PENDING' | 'SYNCED' | 'FAILED';
   tbmsDriverId?: string;
   tbmsSyncError?: string;
+
+  // Email Notification
+  emailNotificationSent?: boolean;
+  emailNotificationAt?: string;
+  emailNotificationError?: string;
 }
 
 export const INITIAL_APPLICATION: DriverApplication = {

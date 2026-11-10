@@ -763,7 +763,14 @@ export default function AdminDashboardPage() {
               <div style={{ padding: '14px', background: '#ffffff', border: '1px solid var(--border-medium)', borderRadius: 'var(--radius-sm)', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)' }}>
                 <div style={{ fontWeight: 600, color: 'var(--flame-600)', marginBottom: '6px' }}>👤 Driver Details</div>
                 <div>Phone: <strong>{selectedApp.mobileNumber}</strong></div>
-                <div>Email: {selectedApp.email}</div>
+                <div>
+                  Email: {selectedApp.email}{' '}
+                  {selectedApp.emailNotificationSent ? (
+                    <span style={{ color: 'var(--success)', fontSize: '11px', fontWeight: 600 }}>✓ Email Link Sent</span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>• Email not sent</span>
+                  )}
+                </div>
                 <div>Address: {selectedApp.residentialAddress}, {selectedApp.postcode}</div>
                 <div>NI Number: <strong>{selectedApp.nationalInsuranceNumber || 'N/A'}</strong></div>
                 <div>TfL Badge: <strong>{selectedApp.tflDriverBadgeNum}</strong> (Exp: {selectedApp.tflDriverBadgeExpiry})</div>
