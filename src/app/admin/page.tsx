@@ -419,9 +419,50 @@ export default function AdminDashboardPage() {
     }
   }
 
+  // Handle Quick Lookup by Ref or Mobile
+  async function handleQuickLookup(identifier: string) {
+    if (!identifier.trim()) return;
+    setActionLoading(true);
+    setActionMessage({ text: `Looking up applicant "${identifier}"...`, type: 'success' });
+
+    try {
+      const res = await fetch(`/api/onboarding/draft?identifier=${encodeURIComponent(identifier.trim())}`);
+      const data = await res.json();
+      if (res.ok && data.application) {
+        const found: DriverApplication = data.application;
+        setApplications((prev) => {
+          const map = new Map<string, DriverApplication>();
+          for (const a of prev) map.set(a.referenceNumber || a.id, a);
+          map.set(found.referenceNumber || found.id, found);
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+          );
+        });
+        setSelectedApp(found);
+        setActionMessage({
+          text: `Found applicant: ${found.legalName} (${found.referenceNumber}) ✓`,
+          type: 'success',
+        });
+      } else {
+        setActionMessage({ text: `No applicant found matching "${identifier}"`, type: 'error' });
+      }
+    } catch {
+      setActionMessage({ text: `Failed to query "${identifier}"`, type: 'error' });
+    } finally {
+      setActionLoading(false);
+      setTimeout(() => setActionMessage(null), 4000);
+    }
+  }
+
   // Filtered List
   const filteredApps = applications.filter((app) => {
-    if (filterStatus !== 'ALL' && app.status !== filterStatus) return false;
+    if (filterStatus !== 'ALL') {
+      if (filterStatus === 'UNDER_REVIEW' || filterStatus === 'SUBMITTED' || filterStatus === 'INACTIVE') {
+        if (app.status !== 'UNDER_REVIEW' && app.status !== 'SUBMITTED') return false;
+      } else if (app.status !== filterStatus) {
+        return false;
+      }
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = app.legalName?.toLowerCase().includes(q);
@@ -630,9 +671,9 @@ export default function AdminDashboardPage() {
           <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '4px' }}>{applications.length}</div>
         </div>
         <div className="glass-panel" style={{ padding: '16px', borderRadius: 'var(--radius-md)' }}>
-          <div style={{ fontSize: '12px', color: 'var(--info)' }}>SUBMITTED</div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--info)', marginTop: '4px' }}>
-            {applications.filter((a) => a.status === 'SUBMITTED').length}
+          <div style={{ fontSize: '12px', color: '#b45309', fontWeight: 600 }}>INACTIVE (UNDER REVIEW)</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#b45309', marginTop: '4px' }}>
+            {applications.filter((a) => a.status === 'UNDER_REVIEW' || a.status === 'SUBMITTED').length}
           </div>
         </div>
         <div className="glass-panel" style={{ padding: '16px', borderRadius: 'var(--radius-md)' }}>
@@ -658,11 +699,23 @@ export default function AdminDashboardPage() {
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
                 type="text"
-                placeholder="Search by name, VRM, phone, or FLM ref..."
+                placeholder="Search or paste FLM-DRV- ref / mobile..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleQuickLookup(searchQuery);
+                }}
                 style={{ fontSize: '13px', padding: '10px 12px', flex: 1 }}
               />
+              <button
+                type="button"
+                onClick={() => handleQuickLookup(searchQuery)}
+                className="btn-secondary"
+                style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap', fontWeight: 600 }}
+                title="Lookup exact applicant from server storage"
+              >
+                🔍 Find
+              </button>
               <button
                 type="button"
                 onClick={loadApplications}
@@ -675,7 +728,7 @@ export default function AdminDashboardPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {['ALL', 'SUBMITTED', 'ACTION_REQUIRED', 'ACTIVE'].map((st) => (
+              {['ALL', 'UNDER_REVIEW', 'ACTION_REQUIRED', 'ACTIVE'].map((st) => (
                 <button
                   key={st}
                   onClick={() => setFilterStatus(st)}
@@ -686,9 +739,10 @@ export default function AdminDashboardPage() {
                     background: filterStatus === st ? 'var(--flame-gradient)' : '#ffffff',
                     color: filterStatus === st ? '#ffffff' : 'var(--text-secondary)',
                     border: filterStatus === st ? '1px solid var(--flame-500)' : '1px solid var(--border-medium)',
+                    fontWeight: filterStatus === st ? 700 : 500,
                   }}
                 >
-                  {st}
+                  {st === 'UNDER_REVIEW' ? 'UNDER REVIEW (INACTIVE)' : st === 'ACTIVE' ? 'ACTIVE (TBMS)' : st}
                 </button>
               ))}
             </div>
@@ -703,6 +757,7 @@ export default function AdminDashboardPage() {
             ) : (
               filteredApps.map((app) => {
                 const isSelected = selectedApp?.id === app.id;
+                const isAppActive = app.status === 'ACTIVE';
                 return (
                   <div
                     key={app.id}
@@ -719,8 +774,18 @@ export default function AdminDashboardPage() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
                       <div style={{ fontWeight: 700, fontSize: '14px' }}>{app.legalName || 'Draft Applicant'}</div>
-                      <span className={`badge badge-${app.status.toLowerCase().replace('_', '-')}`} style={{ fontSize: '10px' }}>
-                        {app.status}
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontWeight: 700,
+                          background: isAppActive ? '#d1fae5' : '#fef3c7',
+                          color: isAppActive ? '#047857' : '#b45309',
+                          border: `1px solid ${isAppActive ? '#a7f3d0' : '#fde68a'}`,
+                        }}
+                      >
+                        {isAppActive ? 'ACTIVE (TBMS)' : 'INACTIVE'}
                       </span>
                     </div>
 
@@ -747,8 +812,18 @@ export default function AdminDashboardPage() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <h3 style={{ fontSize: '20px' }}>{selectedApp.legalName}</h3>
-                  <span className={`badge badge-${selectedApp.status.toLowerCase().replace('_', '-')}`}>
-                    {selectedApp.status}
+                  <span
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      background: selectedApp.status === 'ACTIVE' ? '#d1fae5' : '#fef3c7',
+                      color: selectedApp.status === 'ACTIVE' ? '#047857' : '#b45309',
+                      border: `1px solid ${selectedApp.status === 'ACTIVE' ? '#a7f3d0' : '#fde68a'}`,
+                    }}
+                  >
+                    {selectedApp.status === 'ACTIVE' ? '✓ ACTIVE (TBMS Dispatch)' : '● INACTIVE (Pending Staff Review)'}
                   </span>
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -759,18 +834,41 @@ export default function AdminDashboardPage() {
               {/* Gated TBMS Sync Button */}
               <div>
                 {selectedApp.status === 'ACTIVE' ? (
-                  <div className="badge badge-active" style={{ padding: '8px 14px', fontSize: '12px' }}>
-                    ✓ TBMS Active ({selectedApp.tbmsDriverId})
+                  <div
+                    style={{
+                      padding: '8px 14px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      background: '#d1fae5',
+                      color: '#047857',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid #a7f3d0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    ✓ TBMS Active (Driver ID: {selectedApp.tbmsDriverId || 'Synced'})
                   </div>
                 ) : (
-                  <button
-                    onClick={() => handleTbmsSync(selectedApp.id)}
-                    disabled={actionLoading}
-                    className="btn-primary"
-                    style={{ fontSize: '13px', padding: '10px 18px' }}
-                  >
-                    ⚡ Sync to TBMS Dispatch
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <button
+                      onClick={() => handleTbmsSync(selectedApp.id)}
+                      disabled={actionLoading}
+                      className="btn-primary"
+                      style={{
+                        fontSize: '13px',
+                        padding: '10px 18px',
+                        background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)',
+                      }}
+                    >
+                      ✓ Approve & Activate in TBMS
+                    </button>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Currently Inactive. Approving activates driver in TBMS.
+                    </span>
+                  </div>
                 )}
               </div>
             </div>
@@ -834,6 +932,61 @@ export default function AdminDashboardPage() {
                 <div>A/C Name: <strong>{selectedApp.bankAccountName || 'N/A'}</strong></div>
                 <div>A/C Number: <strong style={{ fontFamily: 'monospace' }}>{selectedApp.bankAccountNumber || 'N/A'}</strong></div>
                 <div>Sort Code: <strong style={{ fontFamily: 'monospace' }}>{selectedApp.bankSortCode || 'N/A'}</strong></div>
+              </div>
+            </div>
+
+            {/* TBMS Dispatch Profile & Document Inspection Details */}
+            <div
+              style={{
+                marginBottom: '20px',
+                padding: '14px 16px',
+                borderRadius: 'var(--radius-sm)',
+                background: '#f8fafc',
+                border: '1px solid var(--border-medium)',
+                fontSize: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '13px' }}>
+                  📡 TBMS Dispatch Profile & Documents Inspection
+                </div>
+                <a
+                  href={`/?ref=${encodeURIComponent(selectedApp.referenceNumber)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: 'var(--flame-600)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  🔗 Open Driver Status & Modify View ↗
+                </a>
+              </div>
+
+              <div style={{ color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+                <div>
+                  <strong>Dispatch Status:</strong>{' '}
+                  <span style={{ fontWeight: 700, color: selectedApp.status === 'ACTIVE' ? 'var(--success)' : '#b45309' }}>
+                    {selectedApp.status === 'ACTIVE'
+                      ? `ACTIVE (TBMS ID: ${selectedApp.tbmsDriverId || 'Synced'})`
+                      : 'INACTIVE (Pending Staff Review)'}
+                  </span>
+                </div>
+                <div style={{ marginTop: '4px', wordBreak: 'break-all' }}>
+                  <strong>TBMS Profile Data:</strong>{' '}
+                  <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--text-primary)' }}>
+                    {[
+                      [selectedApp.residentialAddress, selectedApp.postcode].filter(Boolean).join(', '),
+                      `Email: ${selectedApp.email}`,
+                      `Vehicle: ${selectedApp.make} ${selectedApp.model} (${selectedApp.colour}) | VRM: ${selectedApp.vrm}`,
+                      `TfL Badge: ${selectedApp.tflDriverBadgeNum} (Exp: ${selectedApp.tflDriverBadgeExpiry})`,
+                      `Status: ${selectedApp.status === 'ACTIVE' ? 'ACTIVE (Approved)' : 'INACTIVE (Pending Staff Review)'}`,
+                      `Compliance Documents: https://flamecars.co.uk/admin?ref=${selectedApp.referenceNumber}`,
+                    ].join(' | ')}
+                  </span>
+                </div>
               </div>
             </div>
 

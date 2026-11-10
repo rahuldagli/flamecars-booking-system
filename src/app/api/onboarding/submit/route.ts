@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { applicationStore } from '@/lib/serverStore';
 import { DriverApplication } from '@/types/onboarding';
 import { detectNameDiscrepancies } from '@/lib/nameCheck';
-import { syncDriverToTbms } from '@/lib/tbms';
 import { sendDriverRegistrationEmail, getAppBaseUrl, SendEmailResult } from '@/lib/mailgun';
 
 export async function POST(req: Request) {
@@ -18,63 +17,44 @@ export async function POST(req: Request) {
     }
 
     if (!application.bankAccountName || !application.bankAccountNumber || !application.bankSortCode) {
-      return NextResponse.json({ error: 'Bank account details are required for driver fare disbursements' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Bank account details are required for driver fare disbursements' },
+        { status: 400 }
+      );
     }
 
     if (!application.termsAccepted) {
-      return NextResponse.json({ error: 'You must accept the independent driver agreement' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'You must accept the independent driver agreement' },
+        { status: 400 }
+      );
     }
 
-    // Enforce name discrepancy confirmation if different person documentation is attached
+    // Enforce name discrepancy confirmation if third-party documentation is attached
     const discrepancies = detectNameDiscrepancies(application);
     if (discrepancies.length > 0 && !application.nameMismatchConfirmed) {
       return NextResponse.json(
         {
           error:
-            'Document Name Discrepancy: You have attached documentation for a different person. Please review and confirm the name discrepancy on the review screen before submitting.',
+            'Document Name Discrepancy: You have attached documentation with different name details. Please review and confirm the name discrepancy on the review screen before submitting.',
           discrepancies,
         },
         { status: 400 }
       );
     }
 
-    // Set submitted status
-    application.status = 'SUBMITTED';
+    // Set initial registration status to UNDER_REVIEW (Inactive)
+    // Business Rule: By default, the driver remains inactive and is NOT activated in TBMS
+    // until compliance staff reviews uploaded documents and approves the profile.
+    application.status = 'UNDER_REVIEW';
     application.submittedAt = application.submittedAt || new Date().toISOString();
     application.currentStep = 6;
+    application.tbmsSyncStatus = 'NOT_SYNCED';
 
-    // Automatically sync driver into TBMS Dispatch System on registration
-    try {
-      const tbmsResult = await syncDriverToTbms(application);
-      if (tbmsResult.success && tbmsResult.driverId) {
-        application.tbmsDriverId = tbmsResult.driverId;
-        application.tbmsSyncStatus = 'SYNCED';
-        application.tbmsSyncError = undefined;
-        console.log(`[TBMS AUTO-SYNC] Successfully created driver in TBMS (Driver ID: ${tbmsResult.driverId})`);
-      } else {
-        application.tbmsSyncStatus = 'FAILED';
-        application.tbmsSyncError = tbmsResult.error;
-        console.warn(`[TBMS AUTO-SYNC] Sync failed:`, tbmsResult.error);
-        if (tbmsResult.error && tbmsResult.error.toLowerCase().includes('already in use')) {
-          return NextResponse.json(
-            {
-              error: `TBMS Registration Error: Mobile number ${application.mobileNumber} is already registered in the TBMS Dispatch system. If you are registering a new driver, please use a unique mobile number or contact compliance.`,
-              tbmsError: tbmsResult.error,
-            },
-            { status: 400 }
-          );
-        }
-      }
-    } catch (tbmsErr: any) {
-      application.tbmsSyncStatus = 'FAILED';
-      application.tbmsSyncError = tbmsErr?.message || 'TBMS connection failed';
-      console.error('[TBMS AUTO-SYNC] Exception:', tbmsErr);
-    }
-
-    // Save application to ensure ID and reference number are finalized
+    // Save application to server store immediately
     let saved = await applicationStore.saveAsync(application);
 
-    // Compute preview & modify URL for driver
+    // Compute preview & modify URL for driver email
     const baseUrl = getAppBaseUrl(req);
     const previewUrl = `${baseUrl}/?ref=${encodeURIComponent(saved.referenceNumber)}`;
 
@@ -86,11 +66,11 @@ export async function POST(req: Request) {
         saved.emailNotificationSent = true;
         saved.emailNotificationAt = new Date().toISOString();
         saved.emailNotificationError = undefined;
-        saved = applicationStore.save(saved);
+        saved = await applicationStore.saveAsync(saved);
       } else if (!emailResult.skipped) {
         saved.emailNotificationSent = false;
         saved.emailNotificationError = emailResult.error;
-        saved = applicationStore.save(saved);
+        saved = await applicationStore.saveAsync(saved);
       }
     } catch (emailErr: any) {
       console.error('[MAILGUN] Unexpected exception dispatching email:', emailErr);
@@ -98,12 +78,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'Application submitted successfully',
+      message:
+        'Registration submitted successfully! Your application is under compliance review. Your driver profile remains inactive pending staff approval.',
+      status: 'UNDER_REVIEW',
       application: saved,
       referenceNumber: saved.referenceNumber,
       previewUrl,
-      tbmsSyncStatus: saved.tbmsSyncStatus,
-      tbmsDriverId: saved.tbmsDriverId,
+      tbmsSyncStatus: 'NOT_SYNCED',
       emailNotification: emailResult,
     });
   } catch (error) {

@@ -52,9 +52,9 @@ export default function Step5Review({
           const submittedApp: DriverApplication = {
             ...data,
             referenceNumber: resData.referenceNumber,
-            status: 'SUBMITTED',
+            status: 'UNDER_REVIEW',
             tbmsDriverId: resData.tbmsDriverId || data.tbmsDriverId,
-            tbmsSyncStatus: resData.tbmsSyncStatus || data.tbmsSyncStatus,
+            tbmsSyncStatus: resData.tbmsSyncStatus || 'NOT_SYNCED',
             submittedAt: new Date().toISOString(),
           };
           const raw = localStorage.getItem('flamecars_submitted_applications');
@@ -98,8 +98,20 @@ export default function Step5Review({
           ✓
         </div>
 
-        <div className="badge badge-submitted" style={{ marginBottom: '14px' }}>
-          Application Received
+        <div
+          style={{
+            display: 'inline-block',
+            padding: '5px 14px',
+            borderRadius: '16px',
+            background: '#fef3c7',
+            color: '#b45309',
+            border: '1px solid #fde68a',
+            fontSize: '12px',
+            fontWeight: 700,
+            marginBottom: '14px',
+          }}
+        >
+          STATUS: INACTIVE (Under Compliance Review)
         </div>
 
         <h2 style={{ fontSize: '28px', marginBottom: '10px' }}>
@@ -107,7 +119,7 @@ export default function Step5Review({
         </h2>
 
         <p style={{ color: 'var(--text-secondary)', fontSize: '15px', maxWidth: '520px', margin: '0 auto 24px auto', lineHeight: 1.6 }}>
-          Thank you, <strong>{data.legalName}</strong>. Your driver onboarding file has been queued for compliance review. A confirmation email has been dispatched with your preview and modify link.
+          Thank you, <strong>{data.legalName}</strong>. Your driver onboarding file has been queued for compliance review. By default, your account remains inactive until our compliance staff verifies your documentation and activates your profile for TBMS dispatch. A confirmation email has been dispatched with your preview and modify link.
         </p>
 
         {/* Reference Code Card */}

@@ -310,7 +310,7 @@ export default function OnboardingPage() {
           data={app}
           onChange={updateApp}
           onEditStep={(step) => updateApp({ currentStep: step })}
-          onSubmitSuccess={(ref) => updateApp({ referenceNumber: ref, status: 'SUBMITTED' })}
+          onSubmitSuccess={(ref) => updateApp({ referenceNumber: ref, status: 'UNDER_REVIEW' })}
           onBack={() => updateApp({ currentStep: 5 })}
         />
       )}
