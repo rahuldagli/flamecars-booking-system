@@ -240,7 +240,7 @@ Flame Cars London &bull; Compliance Operations
     formData.append('text', textBody);
     formData.append('html', htmlBody);
 
-    const authHeader = 'Basic ' + Buffer.from(`api:${apiKey}`).toString('base64');
+    const authHeader = 'Basic ' + toBase64(`api:${apiKey}`);
 
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -282,6 +282,16 @@ Flame Cars London &bull; Compliance Operations
   }
 }
 
+function toBase64(str: string): string {
+  if (typeof btoa === 'function') {
+    return btoa(str);
+  }
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(str).toString('base64');
+  }
+  return '';
+}
+
 function escapeHtml(str: string): string {
   if (!str) return '';
   return str
@@ -291,3 +301,4 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
