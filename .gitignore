@@ -17,6 +17,8 @@ dist/
 .turbo/
 *.tsbuildinfo
 .data/
+.open-next/
+.wrangler/
 
 # Debug logs
 npm-debug.log*
