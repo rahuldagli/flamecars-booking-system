@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { DocumentType } from '@/types/onboarding';
 import { applicationStore } from '@/lib/serverStore';
-import { getEnv } from '@/lib/env';
+import { getEnv, getAsyncEnv } from '@/lib/env';
 
 interface ExtractRequest {
   appId?: string;
@@ -16,18 +16,18 @@ interface ExtractRequest {
   };
 }
 
-// Safely obtain OpenRouter API Key from environment or Cloudflare Worker bindings
-function getOpenRouterApiKey(): string | undefined {
-  const key = getEnv('OPENROUTER_API_KEY');
-  if (key && key.length > 15) {
+// Safely obtain OpenRouter API Key from environment, Cloudflare context, or defaults
+async function getOpenRouterApiKey(): Promise<string | undefined> {
+  const key = await getAsyncEnv('OPENROUTER_API_KEY');
+  if (key && key.length > 15 && !key.startsWith('your_')) {
     return key;
   }
   return undefined;
 }
 
 // Safely obtain preferred model
-function getOpenRouterModel(): string {
-  return getEnv('OPENROUTER_MODEL', 'google/gemini-2.5-flash');
+async function getOpenRouterModel(): Promise<string> {
+  return await getAsyncEnv('OPENROUTER_MODEL', 'google/gemini-2.5-flash');
 }
 
 // Normalize various date formats (e.g. DD/MM/YYYY, DD-MM-YYYY, DD Month YYYY) into strictly YYYY-MM-DD
@@ -89,8 +89,8 @@ export async function POST(req: Request) {
 
     console.log(`[AI OCR ENGINE] Processing ${docType} (File: ${filename})...`);
 
-    const openRouterKey = getOpenRouterApiKey();
-    const preferredModel = getOpenRouterModel();
+    const openRouterKey = await getOpenRouterApiKey();
+    const preferredModel = await getOpenRouterModel();
     let visionResult: Record<string, unknown> | null = null;
     let apiError: string | null = null;
 
@@ -127,7 +127,7 @@ export async function POST(req: Request) {
       }
     } else {
       if (!openRouterKey) {
-        apiError = 'OPENROUTER_API_KEY is not configured in server environment variables (.env.local)';
+        apiError = 'OPENROUTER_API_KEY could not be loaded from environment or fallback credentials';
         console.error('[AI OCR ENGINE]', apiError);
       } else if (!dataUrl) {
         apiError = 'No document file data URL received for AI extraction';
@@ -586,8 +586,8 @@ function generateComprehensiveExtraction(
     rawTextContent = `DOCUMENT: ${filename}\n[AI OCR API ERROR]\n${apiError}\n\nPlease inspect the preview and enter details manually.`;
     extractionStatus = 'API Error';
   } else if (isKeyMissing) {
-    summary = `Document "${filename}" uploaded. AI OCR is not configured (OPENROUTER_API_KEY environment variable is missing on the server). Please enter details manually.`;
-    rawTextContent = `DOCUMENT: ${filename}\nAI Vision OCR service is not active because OPENROUTER_API_KEY is not set in the server environment variables.\nPlease set OPENROUTER_API_KEY in your hosting dashboard (e.g. Cloudflare Pages / Vercel) or enter details manually.`;
+    summary = `Document "${filename}" uploaded. AI OCR is not configured. Please enter details manually.`;
+    rawTextContent = `DOCUMENT: ${filename}\nAI Vision OCR service is not active because OPENROUTER_API_KEY is not set in the server environment variables.\nPlease enter details manually.`;
     extractionStatus = 'API Key Not Set';
   } else {
     summary = `Document "${filename}" uploaded. Automatic AI reading was unable to extract fields with high confidence. Please verify or input expiry dates manually.`;

@@ -10,6 +10,13 @@
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
+  },
+  "vars": {
+    "OPENROUTER_MODEL": "google/gemini-2.5-flash",
+    "TBMS_BASE_URL": "https://tbmslive.org/api",
+    "NEXT_PUBLIC_APP_URL": "https://flamecars.co.uk",
+    "MAILGUN_HOST": "https://api.mailgun.net",
+    "MAILGUN_DOMAIN": "mg.flamecars.co.uk",
+    "MAILGUN_FROM": "Flame Cars Compliance <onboarding@mg.flamecars.co.uk>"
   }
 }
-
