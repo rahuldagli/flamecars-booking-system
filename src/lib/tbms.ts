@@ -1,4 +1,5 @@
 import { DriverApplication } from '@/types/onboarding';
+import { getEnv } from '@/lib/env';
 
 export interface TbmsSyncResult {
   success: boolean;
@@ -12,9 +13,9 @@ export interface TbmsSyncResult {
  * Creates a driver profile directly in TBMS and returns the driver_id.
  */
 export async function syncDriverToTbms(app: DriverApplication): Promise<TbmsSyncResult> {
-  const pubKey = process.env.TBMS_PUBLIC_KEY || 'TBMS-PUB-14D2D2C9B1E1C283E8A995B9';
-  const secKey = process.env.TBMS_SECRET_KEY || 'TBMS-SEC-1594B731DD3996EE6CD0D44DC9B1598D5B68';
-  const baseUrl = process.env.TBMS_BASE_URL || 'https://tbmslive.org/api';
+  const pubKey = getEnv('TBMS_PUBLIC_KEY', 'TBMS-PUB-14D2D2C9B1E1C283E8A995B9');
+  const secKey = getEnv('TBMS_SECRET_KEY', 'TBMS-SEC-1594B731DD3996EE6CD0D44DC9B1598D5B68');
+  const baseUrl = getEnv('TBMS_BASE_URL', 'https://tbmslive.org/api');
   const createDriverUrl = `${baseUrl.replace(/\/$/, '')}/CreateDriver.php`;
 
   const driverAddress = [app.residentialAddress, app.postcode]

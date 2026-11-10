@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { getEnv } from '@/lib/env';
 
 export async function POST(req: Request) {
   try {
-    const expectedEmail = (process.env.STAFF_ADMIN_EMAIL || 'admin@flamecars.co.uk').trim().toLowerCase();
-    const expectedPassword = (process.env.STAFF_ADMIN_PASSWORD || 'FlameCars#Admin2026!Sec').trim();
+    const expectedEmail = getEnv('STAFF_ADMIN_EMAIL', 'admin@flamecars.co.uk').toLowerCase();
+    const expectedPassword = getEnv('STAFF_ADMIN_PASSWORD', 'FlameCars#Admin2026!Sec');
 
     const { email, password } = await req.json();
 

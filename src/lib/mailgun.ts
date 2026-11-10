@@ -1,4 +1,5 @@
 import { DriverApplication } from '@/types/onboarding';
+import { getEnv } from '@/lib/env';
 
 export interface SendEmailResult {
   success: boolean;
@@ -11,11 +12,13 @@ export interface SendEmailResult {
  * Returns the base application URL for generating preview & modify links.
  */
 export function getAppBaseUrl(req?: Request): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, '');
+  const publicAppUrl = getEnv('NEXT_PUBLIC_APP_URL');
+  if (publicAppUrl) {
+    return publicAppUrl.replace(/\/+$/, '');
   }
-  if (process.env.APP_URL) {
-    return process.env.APP_URL.replace(/\/+$/, '');
+  const appUrl = getEnv('APP_URL');
+  if (appUrl) {
+    return appUrl.replace(/\/+$/, '');
   }
   if (req) {
     const origin = req.headers.get('origin');
@@ -41,9 +44,9 @@ export async function sendDriverRegistrationEmail(
   app: DriverApplication,
   previewUrl: string
 ): Promise<SendEmailResult> {
-  const apiKey = process.env.MAILGUN_API_KEY?.trim();
-  const domain = process.env.MAILGUN_DOMAIN?.trim();
-  const host = (process.env.MAILGUN_HOST?.trim() || 'https://api.mailgun.net').replace(/\/+$/, '');
+  const apiKey = getEnv('MAILGUN_API_KEY');
+  const domain = getEnv('MAILGUN_DOMAIN');
+  const host = getEnv('MAILGUN_HOST', 'https://api.mailgun.net').replace(/\/+$/, '');
 
   if (!apiKey || !domain) {
     console.warn(
@@ -64,7 +67,7 @@ export async function sendDriverRegistrationEmail(
   }
 
   const fromEmail =
-    process.env.MAILGUN_FROM?.trim() || `Flame Cars Compliance <onboarding@${domain}>`;
+    getEnv('MAILGUN_FROM') || `Flame Cars Compliance <onboarding@${domain}>`;
   const subject = `Registration Received: Flame Cars Driver Onboarding [Ref: ${app.referenceNumber}]`;
 
   const htmlBody = `

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-
-const EXPECTED_EMAIL = (process.env.STAFF_ADMIN_EMAIL || 'admin@flamecars.co.uk').trim().toLowerCase();
+import { getEnv } from '@/lib/env';
 
 export async function GET(req: Request) {
   try {
+    const expectedEmail = getEnv('STAFF_ADMIN_EMAIL', 'admin@flamecars.co.uk').toLowerCase();
     const cookieStore = await cookies();
     const token = cookieStore.get('staff_session_token')?.value;
 
@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       authenticated: true,
       user: {
         name: 'Flame Cars Compliance Lead',
-        email: EXPECTED_EMAIL,
+        email: expectedEmail,
         role: 'SUPER_ADMIN',
       },
     });

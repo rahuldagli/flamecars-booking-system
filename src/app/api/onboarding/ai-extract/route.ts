@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { DocumentType } from '@/types/onboarding';
 import { applicationStore } from '@/lib/serverStore';
-import fs from 'fs';
-import path from 'path';
+import { getEnv } from '@/lib/env';
 
 interface ExtractRequest {
   appId?: string;
@@ -17,58 +16,18 @@ interface ExtractRequest {
   };
 }
 
-// Safely obtain OpenRouter API Key from environment or .env.local on disk
+// Safely obtain OpenRouter API Key from environment or Cloudflare Worker bindings
 function getOpenRouterApiKey(): string | undefined {
-  const envKey = process.env.OPENROUTER_API_KEY;
-  if (envKey && envKey.trim().length > 15 && !envKey.startsWith('your_')) {
-    return envKey.trim();
+  const key = getEnv('OPENROUTER_API_KEY');
+  if (key && key.length > 15) {
+    return key;
   }
-
-  try {
-    const candidatePaths = [
-      path.resolve(process.cwd(), '.env.local'),
-      path.resolve(process.cwd(), '.env'),
-    ];
-    for (const p of candidatePaths) {
-      if (fs.existsSync(p)) {
-        const text = fs.readFileSync(p, 'utf8');
-        const m = text.match(/^OPENROUTER_API_KEY\s*=\s*(.+)$/m);
-        if (m && m[1]) {
-          const val = m[1].trim().replace(/^["']|["']$/g, '');
-          if (val && val.length > 15 && !val.startsWith('your_')) {
-            process.env.OPENROUTER_API_KEY = val;
-            return val;
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('[AI OCR ENGINE] Could not read .env.local fallback:', err);
-  }
-
   return undefined;
 }
 
 // Safely obtain preferred model
 function getOpenRouterModel(): string {
-  const envModel = process.env.OPENROUTER_MODEL;
-  if (envModel && envModel.trim().length > 0) {
-    return envModel.trim();
-  }
-
-  try {
-    const envLocal = path.resolve(process.cwd(), '.env.local');
-    if (fs.existsSync(envLocal)) {
-      const text = fs.readFileSync(envLocal, 'utf8');
-      const m = text.match(/^OPENROUTER_MODEL\s*=\s*(.+)$/m);
-      if (m && m[1]) {
-        const val = m[1].trim().replace(/^["']|["']$/g, '');
-        if (val) return val;
-      }
-    }
-  } catch {}
-
-  return 'google/gemini-2.5-flash';
+  return getEnv('OPENROUTER_MODEL', 'google/gemini-2.5-flash');
 }
 
 // Normalize various date formats (e.g. DD/MM/YYYY, DD-MM-YYYY, DD Month YYYY) into strictly YYYY-MM-DD
