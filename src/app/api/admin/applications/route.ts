@@ -3,7 +3,7 @@ import { applicationStore } from '@/lib/serverStore';
 
 export async function GET() {
   try {
-    const applications = applicationStore.getAll();
+    const applications = await applicationStore.getAllAsync();
 
     const counts = {
       TOTAL: applications.length,
@@ -25,5 +25,25 @@ export async function GET() {
   } catch (error) {
     console.error('Admin Applications List Error:', error);
     return NextResponse.json({ error: 'Failed to retrieve applications' }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    if (Array.isArray(body)) {
+      for (const item of body) {
+        if (item && (item.id || item.referenceNumber || item.mobileNumber)) {
+          applicationStore.save(item);
+        }
+      }
+    } else if (body && (body.id || body.referenceNumber || body.mobileNumber)) {
+      applicationStore.save(body);
+    }
+    const applications = applicationStore.getAll();
+    return NextResponse.json({ success: true, count: applications.length, applications });
+  } catch (error) {
+    console.error('Admin Applications Sync Error:', error);
+    return NextResponse.json({ error: 'Failed to sync applications' }, { status: 500 });
   }
 }

@@ -30,6 +30,49 @@ export default function OnboardingPage() {
     // If driver clicked a preview/modify link from email: ?ref=FLM-DRV-...
     if (refParam) {
       setIsLoadingRef(true);
+
+      const tryFallback = () => {
+        const cleanRef = refParam.trim().toLowerCase();
+        try {
+          const submittedRaw = localStorage.getItem('flamecars_submitted_applications');
+          if (submittedRaw) {
+            const list = JSON.parse(submittedRaw);
+            const found = list.find((a: any) =>
+              (a.referenceNumber || '').toLowerCase() === cleanRef ||
+              (a.mobileNumber || '').replace(/\s+/g, '') === cleanRef
+            );
+            if (found) {
+              setApp({ ...found, currentStep: 6 });
+              saveLocalDraft(found);
+              setSaveStatus('Application loaded from local cache');
+              fetch('/api/onboarding/draft', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(found),
+              }).catch(() => {});
+              return true;
+            }
+          }
+        } catch {}
+
+        const draft = loadLocalDraft();
+        if (
+          draft &&
+          ((draft.referenceNumber || '').toLowerCase() === cleanRef ||
+            (draft.mobileNumber || '').replace(/\s+/g, '') === cleanRef)
+        ) {
+          setApp({ ...draft, currentStep: 6 });
+          setSaveStatus('Application loaded from local draft');
+          fetch('/api/onboarding/draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(draft),
+          }).catch(() => {});
+          return true;
+        }
+        return false;
+      };
+
       fetch(`/api/onboarding/draft?identifier=${encodeURIComponent(refParam.trim())}`)
         .then(async (res) => {
           if (!res.ok) {
@@ -43,12 +86,18 @@ export default function OnboardingPage() {
             saveLocalDraft(data.application);
             setSaveStatus('Application loaded from link');
           } else {
-            setLoadError(`Application "${refParam}" not found. You can resume with your mobile number.`);
+            const recovered = tryFallback();
+            if (!recovered) {
+              setLoadError(`Application "${refParam}" not found. You can resume with your mobile number.`);
+            }
           }
         })
         .catch((err) => {
-          console.error('Failed to load application by ref:', err);
-          setLoadError(`Could not find application "${refParam}". Please check your link or resume with your mobile number.`);
+          console.warn('Server lookup failed, checking local cache:', err);
+          const recovered = tryFallback();
+          if (!recovered) {
+            setLoadError(`Could not find application "${refParam}". Please check your link or resume with your mobile number.`);
+          }
         })
         .finally(() => {
           setIsLoadingRef(false);

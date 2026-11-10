@@ -46,6 +46,26 @@ export default function Step5Review({
       const resData = await res.json();
       if (res.ok) {
         setSubmittedRef(resData.referenceNumber);
+
+        // Persist submitted application into localStorage for instant resilience
+        try {
+          const submittedApp: DriverApplication = {
+            ...data,
+            referenceNumber: resData.referenceNumber,
+            status: 'SUBMITTED',
+            tbmsDriverId: resData.tbmsDriverId || data.tbmsDriverId,
+            tbmsSyncStatus: resData.tbmsSyncStatus || data.tbmsSyncStatus,
+            submittedAt: new Date().toISOString(),
+          };
+          const raw = localStorage.getItem('flamecars_submitted_applications');
+          const list = raw ? JSON.parse(raw) : [];
+          const updated = [
+            submittedApp,
+            ...list.filter((a: any) => a.referenceNumber !== submittedApp.referenceNumber && a.id !== submittedApp.id),
+          ];
+          localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
+        } catch {}
+
         onSubmitSuccess(resData.referenceNumber);
       } else {
         setError(resData.error || 'Submission failed. Please check all fields.');

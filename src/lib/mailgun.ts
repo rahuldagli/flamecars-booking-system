@@ -245,14 +245,19 @@ Flame Cars London &bull; Compliance Operations
 
     const authHeader = 'Basic ' + toBase64(`api:${apiKey}`);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
     const res = await fetch(endpoint, {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         Authorization: authHeader,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData.toString(),
     });
+    clearTimeout(timeoutId);
 
     const responseText = await res.text();
     let json: any = null;

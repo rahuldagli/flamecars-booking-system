@@ -54,7 +54,16 @@ export async function POST(req: Request) {
       } else {
         application.tbmsSyncStatus = 'FAILED';
         application.tbmsSyncError = tbmsResult.error;
-        console.warn(`[TBMS AUTO-SYNC] Sync deferred:`, tbmsResult.error);
+        console.warn(`[TBMS AUTO-SYNC] Sync failed:`, tbmsResult.error);
+        if (tbmsResult.error && tbmsResult.error.toLowerCase().includes('already in use')) {
+          return NextResponse.json(
+            {
+              error: `TBMS Registration Error: Mobile number ${application.mobileNumber} is already registered in the TBMS Dispatch system. If you are registering a new driver, please use a unique mobile number or contact compliance.`,
+              tbmsError: tbmsResult.error,
+            },
+            { status: 400 }
+          );
+        }
       }
     } catch (tbmsErr: any) {
       application.tbmsSyncStatus = 'FAILED';
@@ -63,7 +72,7 @@ export async function POST(req: Request) {
     }
 
     // Save application to ensure ID and reference number are finalized
-    let saved = applicationStore.save(application);
+    let saved = await applicationStore.saveAsync(application);
 
     // Compute preview & modify URL for driver
     const baseUrl = getAppBaseUrl(req);

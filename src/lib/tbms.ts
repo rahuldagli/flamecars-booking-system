@@ -38,7 +38,7 @@ export async function syncDriverToTbms(app: DriverApplication): Promise<TbmsSync
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 second timeout to prevent connection drops
 
     const res = await fetch(targetUrl, {
       method: 'GET',
@@ -59,18 +59,11 @@ export async function syncDriverToTbms(app: DriverApplication): Promise<TbmsSync
       // plain text response
     }
 
-    const isSuccess =
-      res.ok &&
-      (rawText.toLowerCase().includes('success') ||
-        rawText.toLowerCase().includes('saved') ||
-        (parsedJson && (parsedJson.status === 'success' || parsedJson.RESULT === 'OK' || Boolean(parsedJson.driver_id))));
+    const hasError = !res.ok || (parsedJson && (parsedJson.status === 'failed' || Boolean(parsedJson.error)));
+    const isSuccess = !hasError && Boolean(parsedJson?.driver_id || parsedJson?.id || (parsedJson && parsedJson.status === 'success'));
 
-    if (isSuccess || res.status === 200) {
-      const driverId = String(
-        parsedJson?.driver_id ||
-        parsedJson?.id ||
-        `TBMS-${Math.floor(1000 + Math.random() * 9000)}`
-      );
+    if (isSuccess && (parsedJson?.driver_id || parsedJson?.id)) {
+      const driverId = String(parsedJson.driver_id || parsedJson.id);
       return {
         success: true,
         driverId,
@@ -78,9 +71,13 @@ export async function syncDriverToTbms(app: DriverApplication): Promise<TbmsSync
       };
     }
 
+    const errorMsg = parsedJson?.error
+      ? String(parsedJson.error)
+      : rawText.slice(0, 300) || `HTTP error ${res.status}`;
+
     return {
       success: false,
-      error: rawText.slice(0, 300) || `HTTP error ${res.status}`,
+      error: errorMsg,
       rawResponse: rawText,
     };
   } catch (networkErr: any) {

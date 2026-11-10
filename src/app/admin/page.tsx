@@ -111,11 +111,56 @@ export default function AdminDashboardPage() {
   async function loadApplications() {
     setLoading(true);
     try {
+      // 1. Gather any locally saved/submitted applications on this origin
+      let localApps: DriverApplication[] = [];
+      if (typeof window !== 'undefined') {
+        try {
+          const submittedRaw = localStorage.getItem('flamecars_submitted_applications');
+          if (submittedRaw) {
+            const parsed = JSON.parse(submittedRaw);
+            if (Array.isArray(parsed)) localApps = parsed;
+          }
+          // Also check active draft if submitted or referenced
+          const draftRaw = localStorage.getItem('flamecars_driver_draft_v1');
+          if (draftRaw) {
+            const draft = JSON.parse(draftRaw);
+            if (draft && (draft.status === 'SUBMITTED' || draft.referenceNumber) && !localApps.some((a) => a.referenceNumber === draft.referenceNumber)) {
+              localApps.push(draft);
+            }
+          }
+        } catch {}
+      }
+
+      // If local applications exist, sync them to server
+      if (localApps.length > 0) {
+        try {
+          await fetch('/api/admin/applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(localApps),
+          });
+        } catch {}
+      }
+
       const res = await fetch('/api/admin/applications');
       const data = await res.json();
       if (res.ok) {
-        setApplications(data.applications || []);
-        if (data.applications?.length === 0) {
+        const serverApps: DriverApplication[] = data.applications || [];
+        const appMap = new Map<string, DriverApplication>();
+        for (const app of localApps) {
+          const key = app.referenceNumber || app.id;
+          if (key) appMap.set(key, app);
+        }
+        for (const app of serverApps) {
+          const key = app.referenceNumber || app.id;
+          if (key) appMap.set(key, app);
+        }
+        const combined = Array.from(appMap.values()).sort(
+          (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+        );
+
+        setApplications(combined);
+        if (combined.length === 0) {
           seedDemoDriver();
         }
       }
