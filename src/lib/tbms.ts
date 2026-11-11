@@ -16,9 +16,32 @@ export interface TbmsSyncResult {
 }
 
 /**
+ * Maps onboarding vehicle categories to TBMS live vehicle type IDs
+ * (Retrieved directly from tbms_vehicle_list_api.php)
+ */
+export function getTbmsVehicleId(category?: string): string {
+  const cat = (category || '').toLowerCase();
+  if (cat.includes('first class electric')) return '37';
+  if (cat.includes('first class')) return '36';
+  if (cat.includes('electric sedan') || cat.includes('electric')) return '35';
+  if (
+    cat.includes('people carrier') ||
+    cat.includes('mpv8') ||
+    cat.includes('7/8') ||
+    cat.includes('minibus')
+  ) {
+    return '34'; // Executive People Carrier / MPV8
+  }
+  if (cat.includes('mpv') || cat.includes('mpv5') || cat.includes('mpv6')) return '28'; // MPV5
+  if (cat.includes('executive')) return '29'; // Executive
+  if (cat.includes('estate')) return '27'; // Estate
+  return '26'; // Sedan / Saloon
+}
+
+/**
  * Server-to-server integration with TBMS Dispatch API (CreateDriver.php)
- * Creates a driver profile in TBMS with structured address, vehicle details,
- * licensing information, status, and direct compliance inspection links.
+ * Creates a driver profile in TBMS with structured address, AI OCR-extracted details,
+ * licensing information, vehicle mapping, status, and direct compliance inspection links.
  */
 export async function syncDriverToTbms(
   app: DriverApplication,
@@ -42,21 +65,92 @@ export async function syncDriverToTbms(
       ? 'ACTIVE (Approved by Compliance Staff)'
       : 'INACTIVE (Pending Staff Review)';
 
+  // 1. TfL PHV Driver Badge (Form input or AI OCR fallback)
+  const tflBadgeDoc = app.documents?.TFL_PHV_DRIVER_BADGE_FRONT;
+  const badgeNum =
+    app.tflDriverBadgeNum ||
+    tflBadgeDoc?.aiExtractedData?.licenceNumber ||
+    '';
+  const badgeExpiry =
+    app.tflDriverBadgeExpiry ||
+    tflBadgeDoc?.expiryDate ||
+    tflBadgeDoc?.aiExtractedData?.expiryDate ||
+    '';
+
+  // 2. DVLA Driving Licence (AI OCR extracted)
+  const dvlaDoc = app.documents?.DVLA_DRIVING_LICENCE_FRONT;
+  const dvlaLicenceNum =
+    dvlaDoc?.aiExtractedData?.licenceNumber ||
+    '';
+  const dvlaExpiry =
+    dvlaDoc?.expiryDate ||
+    dvlaDoc?.aiExtractedData?.expiryDate ||
+    '';
+
+  // 3. TfL PHV Vehicle Licence (Form input or AI OCR fallback)
+  const vehLicDoc = app.documents?.TFL_PHV_VEHICLE_LICENCE;
+  const phvVehLicence =
+    app.tflPhvVehicleLicence ||
+    vehLicDoc?.aiExtractedData?.licenceNumber ||
+    '';
+  const phvVehExpiry =
+    app.tflPhvVehicleExpiry ||
+    vehLicDoc?.expiryDate ||
+    vehLicDoc?.aiExtractedData?.expiryDate ||
+    '';
+
+  // 4. Vehicle Specifications & VRM (Form input or AI OCR fallback)
+  const v5cDoc = app.documents?.V5C_LOGBOOK;
+  const resolvedVrm =
+    app.vrm ||
+    vehLicDoc?.aiExtractedData?.vrm ||
+    v5cDoc?.aiExtractedData?.vrm ||
+    '';
+  const resolvedMake =
+    app.make ||
+    vehLicDoc?.aiExtractedData?.vehicleMake ||
+    '';
+  const resolvedModel =
+    app.model ||
+    vehLicDoc?.aiExtractedData?.vehicleModel ||
+    '';
+
+  // 5. Hire & Reward Insurance (AI OCR extracted)
+  const insDoc = app.documents?.HIRE_REWARD_INSURANCE;
+  const insPolicy = insDoc?.aiExtractedData?.policyNumber || '';
+  const insExpiry =
+    insDoc?.expiryDate ||
+    insDoc?.aiExtractedData?.expiryDate ||
+    '';
+
+  // 6. MOT Certificate (AI OCR extracted)
+  const motDoc = app.documents?.MOT_CERTIFICATE;
+  const motExpiry =
+    motDoc?.expiryDate ||
+    motDoc?.aiExtractedData?.expiryDate ||
+    '';
+
+  // 7. National Insurance Number
+  const niNumber = app.nationalInsuranceNumber || '';
+
   // Build clean residential address
   const cleanResidential = [app.residentialAddress, app.postcode]
     .filter(Boolean)
     .join(', ')
     .trim() || 'London, UK';
 
-  // Build rich structured address containing all vehicle & licensing details
+  // Build rich structured address containing all vehicle & licensing details (including AI OCR data)
   // so TBMS dispatchers can see full driver and vehicle context directly on the profile
   const structuredAddressParts = [
     cleanResidential,
     `Email: ${app.email || 'N/A'}`,
-    `Vehicle: ${app.make || ''} ${app.model || ''} (${app.colour || 'Standard'}) | VRM: ${app.vrm || 'N/A'} | Category: ${app.vehicleCategory || 'Saloon'} (${app.passengerSeats || 4} Seats)`,
-    `TfL PHV Badge: ${app.tflDriverBadgeNum || 'N/A'} (Exp: ${app.tflDriverBadgeExpiry || 'N/A'})`,
-    app.tflPhvVehicleLicence ? `PHV Vehicle Licence: ${app.tflPhvVehicleLicence}` : null,
-    app.nationalInsuranceNumber ? `NI: ${app.nationalInsuranceNumber}` : null,
+    `Vehicle: ${resolvedMake} ${resolvedModel} (${app.colour || 'Standard'}) | VRM: ${resolvedVrm || 'N/A'} | Category: ${app.vehicleCategory || 'Saloon'} (${app.passengerSeats || 4} Seats)`,
+    badgeNum ? `TfL Badge: ${badgeNum} (Exp: ${badgeExpiry || 'N/A'})` : null,
+    phvVehLicence ? `PHV Vehicle Licence: ${phvVehLicence} (Exp: ${phvVehExpiry || 'N/A'})` : null,
+    dvlaLicenceNum ? `DVLA Licence: ${dvlaLicenceNum} (Exp: ${dvlaExpiry || 'N/A'})` : null,
+    insExpiry ? `Insurance Exp: ${insExpiry}${insPolicy ? ` (Policy: ${insPolicy})` : ''}` : null,
+    motExpiry ? `MOT Exp: ${motExpiry}` : null,
+    niNumber ? `NI: ${niNumber}` : null,
     app.bankAccountNumber
       ? `Bank: ${app.bankAccountName || 'Driver'} (A/C: ${app.bankAccountNumber}, Sort: ${app.bankSortCode})`
       : null,
@@ -79,26 +173,33 @@ export async function syncDriverToTbms(
     driver_email: app.email || '',
     email: app.email || '',
     driveremail: app.email || '',
-    // Vehicle specifications
-    vrm: app.vrm || '',
-    car_reg: app.vrm || '',
-    vehicle_vrm: app.vrm || '',
-    make: app.make || '',
-    model: app.model || '',
+    // Vehicle specifications & mapped TBMS vehicle type
+    vehicle_type: getTbmsVehicleId(app.vehicleCategory),
+    car_type: getTbmsVehicleId(app.vehicleCategory),
+    vrm: resolvedVrm,
+    car_reg: resolvedVrm,
+    vehicle_vrm: resolvedVrm,
+    make: resolvedMake,
+    model: resolvedModel,
     colour: app.colour || '',
     seat_capacity: String(app.passengerSeats || 4),
-    // Licences & Badge variants
-    badge: app.tflDriverBadgeNum || '',
-    badge_no: app.tflDriverBadgeNum || '',
-    badge_number: app.tflDriverBadgeNum || '',
-    badge_expiry: app.tflDriverBadgeExpiry || '',
-    tfl_badge: app.tflDriverBadgeNum || '',
-    phv_driver_licence: app.tflDriverBadgeNum || '',
-    phv_licence: app.tflDriverBadgeNum || '',
-    phv_driver_expiry: app.tflDriverBadgeExpiry || '',
-    phv_veh_licence: app.tflPhvVehicleLicence || '',
-    vehicle_licence: app.tflPhvVehicleLicence || '',
-    phv_veh_expiry: app.tflPhvVehicleExpiry || '',
+    // Licences & Badge variants (with AI OCR derived values)
+    badge: badgeNum,
+    badge_no: badgeNum,
+    badge_number: badgeNum,
+    badge_expiry: badgeExpiry,
+    tfl_badge: badgeNum,
+    phv_driver_licence: badgeNum,
+    phv_licence: badgeNum,
+    phv_driver_expiry: badgeExpiry,
+    phv_veh_licence: phvVehLicence,
+    vehicle_licence: phvVehLicence,
+    phv_veh_expiry: phvVehExpiry,
+    driving_licence: dvlaLicenceNum,
+    driving_license: dvlaLicenceNum,
+    driving_licence_expiry: dvlaExpiry,
+    insurance_expiry: insExpiry,
+    mot_expiry: motExpiry,
     // Banking & Payout details
     bank_name: 'Bank Transfer',
     account_name: app.bankAccountName || '',
@@ -108,9 +209,9 @@ export async function syncDriverToTbms(
     acc_no: app.bankAccountNumber || '',
     sort_code: app.bankSortCode || '',
     sortcode: app.bankSortCode || '',
-    ni_number: app.nationalInsuranceNumber || '',
-    national_insurance: app.nationalInsuranceNumber || '',
-    nino: app.nationalInsuranceNumber || '',
+    ni_number: niNumber,
+    national_insurance: niNumber,
+    nino: niNumber,
     // Notes & Internal Comments
     notes: `Flame Cars Ref: ${app.referenceNumber}. View documents: ${documentInspectionUrl}`,
     driver_notes: `Flame Cars Ref: ${app.referenceNumber}. View documents: ${documentInspectionUrl}`,
