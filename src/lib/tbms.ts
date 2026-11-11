@@ -57,6 +57,9 @@ export async function syncDriverToTbms(
     `TfL PHV Badge: ${app.tflDriverBadgeNum || 'N/A'} (Exp: ${app.tflDriverBadgeExpiry || 'N/A'})`,
     app.tflPhvVehicleLicence ? `PHV Vehicle Licence: ${app.tflPhvVehicleLicence}` : null,
     app.nationalInsuranceNumber ? `NI: ${app.nationalInsuranceNumber}` : null,
+    app.bankAccountNumber
+      ? `Bank: ${app.bankAccountName || 'Driver'} (A/C: ${app.bankAccountNumber}, Sort: ${app.bankSortCode})`
+      : null,
     `Status: ${statusLabel}`,
     `Compliance Documents: ${documentInspectionUrl}`,
   ].filter(Boolean);
@@ -65,29 +68,59 @@ export async function syncDriverToTbms(
 
   const cleanMobile = (app.mobileNumber || '').replace(/\s+/g, '');
 
-  // URL parameters including core required parameters and extended metadata
+  // URL parameters including core required parameters and all possible extended metadata
   const params = new URLSearchParams({
     api_public_key: pubKey,
     api_secret_key: secKey,
     driver_name: app.legalName || 'Driver',
     driver_mobile: cleanMobile,
     driver_address: formattedDriverAddress,
-    // Extended parameters for TBMS schemas that support individual fields
+    // Email variants
     driver_email: app.email || '',
     email: app.email || '',
+    driveremail: app.email || '',
+    // Vehicle specifications
     vrm: app.vrm || '',
+    car_reg: app.vrm || '',
     vehicle_vrm: app.vrm || '',
     make: app.make || '',
     model: app.model || '',
     colour: app.colour || '',
     seat_capacity: String(app.passengerSeats || 4),
-    tfl_badge: app.tflDriverBadgeNum || '',
+    // Licences & Badge variants
+    badge: app.tflDriverBadgeNum || '',
+    badge_no: app.tflDriverBadgeNum || '',
     badge_number: app.tflDriverBadgeNum || '',
     badge_expiry: app.tflDriverBadgeExpiry || '',
+    tfl_badge: app.tflDriverBadgeNum || '',
+    phv_driver_licence: app.tflDriverBadgeNum || '',
+    phv_licence: app.tflDriverBadgeNum || '',
+    phv_driver_expiry: app.tflDriverBadgeExpiry || '',
+    phv_veh_licence: app.tflPhvVehicleLicence || '',
     vehicle_licence: app.tflPhvVehicleLicence || '',
+    phv_veh_expiry: app.tflPhvVehicleExpiry || '',
+    // Banking & Payout details
+    bank_name: 'Bank Transfer',
+    account_name: app.bankAccountName || '',
+    acc_name: app.bankAccountName || '',
+    account_no: app.bankAccountNumber || '',
+    account_number: app.bankAccountNumber || '',
+    acc_no: app.bankAccountNumber || '',
+    sort_code: app.bankSortCode || '',
+    sortcode: app.bankSortCode || '',
+    ni_number: app.nationalInsuranceNumber || '',
+    national_insurance: app.nationalInsuranceNumber || '',
+    nino: app.nationalInsuranceNumber || '',
+    // Notes & Internal Comments
+    notes: `Flame Cars Ref: ${app.referenceNumber}. View documents: ${documentInspectionUrl}`,
+    driver_notes: `Flame Cars Ref: ${app.referenceNumber}. View documents: ${documentInspectionUrl}`,
+    // Status & Activation
     status: targetStatus === 'ACTIVE' ? '1' : '0',
     is_active: targetStatus === 'ACTIVE' ? '1' : '0',
+    active: targetStatus === 'ACTIVE' ? '1' : '0',
     driver_status: targetStatus,
+    profile_approved: targetStatus === 'ACTIVE' ? '1' : '0',
+    approved: targetStatus === 'ACTIVE' ? '1' : '0',
     ref: app.referenceNumber || '',
     document_url: documentInspectionUrl,
   });
