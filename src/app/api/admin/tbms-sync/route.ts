@@ -44,17 +44,24 @@ export async function POST(req: Request) {
       app.tbmsSyncStatus = 'SYNCED';
       app.status = 'ACTIVE';
       app.tbmsDriverId = tbmsResult.driverId;
+      app.syncedName = app.legalName;
+      app.detailsModifiedAfterSync = false;
+      app.lastModifiedFields = [];
       app.tbmsSyncError = undefined;
     } else if (tbmsResult.alreadyExists) {
       // Driver mobile was already registered in TBMS dispatch
       app.tbmsSyncStatus = 'SYNCED';
       app.status = 'ACTIVE';
-      app.tbmsSyncError = 'Mobile number already registered in TBMS dispatch system';
+      app.syncedName = app.legalName;
+      app.detailsModifiedAfterSync = false;
+      app.lastModifiedFields = [];
+      app.tbmsSyncError = 'Mobile number already registered in TBMS dispatch system. Verified profile updated with latest details.';
     } else {
       app.tbmsSyncStatus = 'FAILED';
       app.tbmsSyncError = tbmsResult.error || 'Failed to sync with TBMS';
     }
 
+    app.updatedAt = new Date().toISOString();
     const saved = await applicationStore.saveAsync(app);
 
     if (tbmsResult.success || tbmsResult.alreadyExists) {

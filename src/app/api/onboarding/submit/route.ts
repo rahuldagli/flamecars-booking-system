@@ -43,13 +43,45 @@ export async function POST(req: Request) {
       );
     }
 
-    // Set initial registration status to UNDER_REVIEW (Inactive)
-    // Business Rule: By default, the driver remains inactive and is NOT activated in TBMS
-    // until compliance staff reviews uploaded documents and approves the profile.
-    application.status = 'UNDER_REVIEW';
+    // Query existing record to preserve IDs and detect changes
+    let existing = (application.id ? applicationStore.get(application.id) : undefined)
+      || (application.referenceNumber ? applicationStore.get(application.referenceNumber) : undefined)
+      || (application.mobileNumber ? applicationStore.get(application.mobileNumber) : undefined);
+
+    if (!existing) {
+      if (application.id) existing = await applicationStore.getAsync(application.id);
+      if (!existing && application.referenceNumber) existing = await applicationStore.getAsync(application.referenceNumber);
+      if (!existing && application.mobileNumber) existing = await applicationStore.getAsync(application.mobileNumber);
+    }
+
+    if (existing) {
+      application.id = existing.id;
+      application.referenceNumber = existing.referenceNumber;
+      if (existing.tbmsDriverId) {
+        application.tbmsDriverId = existing.tbmsDriverId;
+        const syncedName = existing.syncedName || existing.legalName;
+        application.syncedName = syncedName;
+        if (application.legalName.trim() !== syncedName.trim()) {
+          application.detailsModifiedAfterSync = true;
+          application.lastModifiedFields = [
+            `Legal Name updated: "${application.legalName.trim()}" (synced in TBMS as "${syncedName.trim()}")`,
+          ];
+        }
+      }
+      // If already active in TBMS, keep active status; if not, keep under review
+      application.status = existing.status === 'ACTIVE' ? 'ACTIVE' : 'UNDER_REVIEW';
+      application.tbmsSyncStatus = existing.tbmsSyncStatus || 'NOT_SYNCED';
+    } else {
+      // New registration: Set initial registration status to UNDER_REVIEW (Inactive)
+      // Business Rule: By default, the driver remains inactive and is NOT activated in TBMS
+      // until compliance staff reviews uploaded documents and approves the profile.
+      application.status = 'UNDER_REVIEW';
+      application.tbmsSyncStatus = 'NOT_SYNCED';
+    }
+
     application.submittedAt = application.submittedAt || new Date().toISOString();
+    application.updatedAt = new Date().toISOString();
     application.currentStep = 6;
-    application.tbmsSyncStatus = 'NOT_SYNCED';
 
     // Save application to server store immediately
     let saved = await applicationStore.saveAsync(application);

@@ -47,25 +47,29 @@ export default function Step5Review({
       if (res.ok) {
         setSubmittedRef(resData.referenceNumber);
 
+        const returnedApp: DriverApplication = resData.application || {
+          ...data,
+          referenceNumber: resData.referenceNumber,
+          status: 'UNDER_REVIEW',
+          tbmsDriverId: resData.tbmsDriverId || data.tbmsDriverId,
+          tbmsSyncStatus: resData.tbmsSyncStatus || 'NOT_SYNCED',
+          submittedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
         // Persist submitted application into localStorage for instant resilience
         try {
-          const submittedApp: DriverApplication = {
-            ...data,
-            referenceNumber: resData.referenceNumber,
-            status: 'UNDER_REVIEW',
-            tbmsDriverId: resData.tbmsDriverId || data.tbmsDriverId,
-            tbmsSyncStatus: resData.tbmsSyncStatus || 'NOT_SYNCED',
-            submittedAt: new Date().toISOString(),
-          };
           const raw = localStorage.getItem('flamecars_submitted_applications');
           const list = raw ? JSON.parse(raw) : [];
           const updated = [
-            submittedApp,
-            ...list.filter((a: any) => a.referenceNumber !== submittedApp.referenceNumber && a.id !== submittedApp.id),
+            returnedApp,
+            ...list.filter((a: any) => a.referenceNumber !== returnedApp.referenceNumber && a.id !== returnedApp.id),
           ];
           localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
+          localStorage.setItem('flamecars_driver_draft_v1', JSON.stringify(returnedApp));
         } catch {}
 
+        onChange(returnedApp);
         onSubmitSuccess(resData.referenceNumber);
       } else {
         setError(resData.error || 'Submission failed. Please check all fields.');

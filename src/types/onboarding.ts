@@ -111,6 +111,10 @@ export interface DriverApplication {
   tbmsSyncStatus?: 'NOT_SYNCED' | 'PENDING' | 'SYNCED' | 'FAILED';
   tbmsDriverId?: string;
   tbmsSyncError?: string;
+  syncedName?: string;
+  detailsModifiedAfterSync?: boolean;
+  lastModifiedFields?: string[];
+  tbmsUpdateNotice?: string;
 
   // Email Notification
   emailNotificationSent?: boolean;

@@ -84,6 +84,18 @@ export default function OnboardingPage() {
           if (data && data.application) {
             setApp({ ...data.application, currentStep: 6 });
             saveLocalDraft(data.application);
+            try {
+              const raw = localStorage.getItem('flamecars_submitted_applications');
+              const list = raw ? JSON.parse(raw) : [];
+              const updated = [
+                data.application,
+                ...list.filter(
+                  (a: any) =>
+                    a.referenceNumber !== data.application.referenceNumber && a.id !== data.application.id
+                ),
+              ];
+              localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
+            } catch {}
             setSaveStatus('Application loaded from link');
           } else {
             const recovered = tryFallback();
@@ -129,9 +141,25 @@ export default function OnboardingPage() {
       const next = { ...prev, ...updates, updatedAt: new Date().toISOString() };
       saveLocalDraft(next);
 
-      // Async background server sync (debounced 800ms) if mobile number exists
-      if (next.mobileNumber) {
-        setSaveStatus('Saving draft...');
+      // Keep submitted applications in sync if this application already has a reference number
+      if (next.referenceNumber) {
+        try {
+          const raw = localStorage.getItem('flamecars_submitted_applications');
+          const list = raw ? JSON.parse(raw) : [];
+          const updated = [
+            next,
+            ...list.filter(
+              (a: any) =>
+                a.referenceNumber !== next.referenceNumber && a.id !== next.id
+            ),
+          ];
+          localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
+        } catch {}
+      }
+
+      // Async background server sync (debounced 600ms) if mobile number or reference exists
+      if (next.mobileNumber || next.referenceNumber) {
+        setSaveStatus('Saving changes...');
         if (draftTimerRef.timer) {
           clearTimeout(draftTimerRef.timer);
         }
@@ -141,9 +169,19 @@ export default function OnboardingPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(next),
           })
-            .then(() => setSaveStatus('Draft saved'))
+            .then(async (res) => {
+              if (res.ok) {
+                const data = await res.json();
+                if (data.application?.referenceNumber && !next.referenceNumber) {
+                  setApp((curr) => ({ ...curr, referenceNumber: data.application.referenceNumber }));
+                }
+                setSaveStatus('Draft saved ✓');
+              } else {
+                setSaveStatus('');
+              }
+            })
             .catch(() => setSaveStatus(''));
-        }, 800);
+        }, 600);
       }
       return next;
     });
@@ -310,7 +348,12 @@ export default function OnboardingPage() {
           data={app}
           onChange={updateApp}
           onEditStep={(step) => updateApp({ currentStep: step })}
-          onSubmitSuccess={(ref) => updateApp({ referenceNumber: ref, status: 'UNDER_REVIEW' })}
+          onSubmitSuccess={(ref) =>
+            updateApp({
+              referenceNumber: ref,
+              status: app.status === 'ACTIVE' ? 'ACTIVE' : 'UNDER_REVIEW',
+            })
+          }
           onBack={() => updateApp({ currentStep: 5 })}
         />
       )}

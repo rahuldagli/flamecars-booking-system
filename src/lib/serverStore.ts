@@ -104,8 +104,11 @@ async function loadAllFromCloudflareCache(): Promise<DriverApplication[]> {
       const list: DriverApplication[] = await res.json();
       if (Array.isArray(list)) {
         for (const app of list) {
-          if (app && app.id && !global.__flamecars_applications!.has(app.id)) {
-            global.__flamecars_applications!.set(app.id, app);
+          if (app && app.id) {
+            const current = global.__flamecars_applications!.get(app.id);
+            if (!current || new Date(app.updatedAt || 0).getTime() > new Date(current.updatedAt || 0).getTime()) {
+              global.__flamecars_applications!.set(app.id, app);
+            }
           }
         }
         return list;
@@ -119,6 +122,7 @@ async function loadAllFromCloudflareCache(): Promise<DriverApplication[]> {
 
 export const applicationStore = {
   get(idOrMobileOrRef: string): DriverApplication | undefined {
+    if (!idOrMobileOrRef) return undefined;
     const apps = Array.from(global.__flamecars_applications!.values());
     const targetClean = idOrMobileOrRef.replace(/\s+/g, '').toLowerCase();
     return apps.find((a) => {
@@ -130,6 +134,7 @@ export const applicationStore = {
   },
 
   async getAsync(idOrMobileOrRef: string): Promise<DriverApplication | undefined> {
+    if (!idOrMobileOrRef) return undefined;
     const local = this.get(idOrMobileOrRef);
     if (local) return local;
     return await loadFromCloudflareCache(idOrMobileOrRef);
@@ -137,7 +142,7 @@ export const applicationStore = {
 
   getAll(): DriverApplication[] {
     return Array.from(global.__flamecars_applications!.values()).sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
     );
   },
 
@@ -147,26 +152,48 @@ export const applicationStore = {
   },
 
   save(app: DriverApplication): DriverApplication {
-    const existing = app.id
-      ? this.get(app.id)
-      : app.referenceNumber || app.mobileNumber
-      ? this.get(app.referenceNumber || app.mobileNumber)
-      : undefined;
+    // Robust multi-key lookup to find existing application by ID, Reference, or Mobile
+    let existing: DriverApplication | undefined;
+    if (app.id) existing = this.get(app.id);
+    if (!existing && app.referenceNumber) existing = this.get(app.referenceNumber);
+    if (!existing && app.mobileNumber) existing = this.get(app.mobileNumber);
 
     if (existing) {
-      if (!app.id) app.id = existing.id;
-      if (!app.referenceNumber) app.referenceNumber = existing.referenceNumber;
+      const originalId = existing.id;
+      // Unify IDs: if app had a different temporary id, remove the temporary key
+      if (app.id && app.id !== originalId) {
+        global.__flamecars_applications!.delete(app.id);
+      }
+      app.id = originalId;
+      if (existing.referenceNumber) {
+        app.referenceNumber = existing.referenceNumber;
+      }
 
-      // Crucial: Protect ACTIVE status and TBMS Driver ID from being downgraded by stale drafts
-      if (existing.status === 'ACTIVE' && app.status !== 'ACTIVE') {
+      // Track if details were modified after initial TBMS sync
+      if (existing.tbmsDriverId) {
+        app.tbmsDriverId = existing.tbmsDriverId;
+        const syncedName = existing.syncedName || existing.legalName;
+        app.syncedName = syncedName;
+
+        // Check if driver updated their legal name
+        if (app.legalName && app.legalName.trim() !== syncedName.trim()) {
+          app.detailsModifiedAfterSync = true;
+          app.lastModifiedFields = [
+            `Legal Name updated: "${app.legalName.trim()}" (synced in TBMS as "${syncedName.trim()}")`,
+          ];
+        } else if (app.detailsModifiedAfterSync === undefined) {
+          app.detailsModifiedAfterSync = existing.detailsModifiedAfterSync;
+          app.lastModifiedFields = existing.lastModifiedFields;
+        }
+      }
+
+      // Preserve ACTIVE status if already approved and activated
+      if (existing.status === 'ACTIVE') {
         app.status = 'ACTIVE';
         app.tbmsDriverId = app.tbmsDriverId || existing.tbmsDriverId;
-        app.tbmsSyncStatus = 'SYNCED';
-      }
-      if (existing.tbmsDriverId && !app.tbmsDriverId) {
-        app.tbmsDriverId = existing.tbmsDriverId;
         app.tbmsSyncStatus = existing.tbmsSyncStatus || 'SYNCED';
       }
+
       // Preserve approved document reviews from staff
       if (existing.documents && app.documents) {
         for (const [docKey, existingDoc] of Object.entries(existing.documents)) {
@@ -200,6 +227,20 @@ export const applicationStore = {
   },
 
   async saveAsync(app: DriverApplication): Promise<DriverApplication> {
+    // If not found in current isolate memory, query Cloudflare cache before saving
+    let existing = app.id ? this.get(app.id) : undefined;
+    if (!existing && app.referenceNumber) existing = this.get(app.referenceNumber);
+    if (!existing && app.mobileNumber) existing = this.get(app.mobileNumber);
+
+    if (!existing) {
+      if (app.id) existing = await loadFromCloudflareCache(app.id);
+      if (!existing && app.referenceNumber) existing = await loadFromCloudflareCache(app.referenceNumber);
+      if (!existing && app.mobileNumber) existing = await loadFromCloudflareCache(app.mobileNumber);
+      if (existing && existing.id) {
+        global.__flamecars_applications!.set(existing.id, existing);
+      }
+    }
+
     const saved = this.save(app);
     await persistToCloudflareCache(saved);
     return saved;
