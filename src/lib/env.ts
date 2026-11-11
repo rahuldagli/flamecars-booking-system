@@ -30,9 +30,9 @@ const DEFAULT_FALLBACKS: Record<string, () => string> = {
   STAFF_ADMIN_EMAIL: () => 'admin@flamecars.co.uk',
   STAFF_ADMIN_PASSWORD: () => 'FlameCars#Admin2026!Sec',
   MAILGUN_API_KEY: () => safeDecode('NWMyYThiMTI5NzEwYjA4Y2FlNDZjMmIyNDEwZjEyOGQtNGU2ODYwNjQtMWU1YjRlZGE='),
-  MAILGUN_DOMAIN: () => 'mg.flamecars.co.uk',
-  MAILGUN_HOST: () => 'https://api.mailgun.net',
-  MAILGUN_FROM: () => 'Flame Cars Compliance <onboarding@mg.flamecars.co.uk>',
+  MAILGUN_DOMAIN: () => 'mail.uk-ilr.co.uk',
+  MAILGUN_HOST: () => 'https://api.eu.mailgun.net',
+  MAILGUN_FROM: () => 'Flame Cars Compliance <onboarding@mail.uk-ilr.co.uk>',
   NEXT_PUBLIC_APP_URL: () => 'https://flamecars.co.uk',
 };
 

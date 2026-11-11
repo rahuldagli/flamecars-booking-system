@@ -479,13 +479,18 @@ export default function AdminDashboardPage() {
       });
       const data = await res.json();
 
-      if (res.ok && data.application) {
+      if (res.ok && data.success && data.application) {
         setSelectedApp(data.application);
         setApplications((prev) => prev.map((a) => (a.id === appId ? data.application : a)));
         persistAppToLocal(data.application);
         setActionMessage({
           text: `Success! Driver is now ACTIVE in TBMS (ID: ${data.application.tbmsDriverId || 'Synced'}) ✓`,
           type: 'success',
+        });
+      } else if (data.alreadyExists) {
+        setActionMessage({
+          text: `⚠️ TBMS Re-sync: TBMS returned 'Mobile number is already in use.' Because CreateDriver.php is insert-only, TBMS cannot update existing drivers via API. Please update the name in TBMS Admin Console (click 'Copy Updated Details for TBMS' below).`,
+          type: 'error',
         });
       } else {
         setActionMessage({ text: data.error || 'TBMS sync error', type: 'error' });
@@ -494,6 +499,43 @@ export default function AdminDashboardPage() {
       setActionMessage({ text: 'TBMS integration call failed', type: 'error' });
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  // Handle Resend Registration Email
+  async function handleResendEmail(appId: string) {
+    setActionLoading(true);
+    setActionMessage({ text: 'Dispatching registration email via Mailgun...', type: 'success' });
+
+    try {
+      const res = await fetch('/api/admin/resend-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appId }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        if (data.application) {
+          setSelectedApp(data.application);
+          setApplications((prev) => prev.map((a) => (a.id === appId ? data.application : a)));
+          persistAppToLocal(data.application);
+        }
+        setActionMessage({
+          text: `Email successfully delivered to ${selectedApp?.email}! (ID: ${data.messageId || 'queued'}) ✓`,
+          type: 'success',
+        });
+      } else {
+        setActionMessage({
+          text: `Failed to send email: ${data.error || 'Check Mailgun configuration'}`,
+          type: 'error',
+        });
+      }
+    } catch {
+      setActionMessage({ text: 'Network failure calling email dispatch endpoint', type: 'error' });
+    } finally {
+      setActionLoading(false);
+      setTimeout(() => setActionMessage(null), 6000);
     }
   }
 
@@ -1125,13 +1167,25 @@ export default function AdminDashboardPage() {
               <div style={{ padding: '14px', background: '#ffffff', border: '1px solid var(--border-medium)', borderRadius: 'var(--radius-sm)', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)' }}>
                 <div style={{ fontWeight: 600, color: 'var(--flame-600)', marginBottom: '6px' }}>👤 Driver Details</div>
                 <div>Phone: <strong>{selectedApp.mobileNumber}</strong></div>
-                <div>
-                  Email: {selectedApp.email}{' '}
-                  {selectedApp.emailNotificationSent ? (
-                    <span style={{ color: 'var(--success)', fontSize: '11px', fontWeight: 600 }}>✓ Email Link Sent</span>
-                  ) : (
-                    <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>• Email not sent</span>
-                  )}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', margin: '3px 0' }}>
+                  <div>
+                    Email: <strong>{selectedApp.email}</strong>{' '}
+                    {selectedApp.emailNotificationSent ? (
+                      <span style={{ color: 'var(--success)', fontSize: '11px', fontWeight: 600 }}>✓ Link Sent</span>
+                    ) : (
+                      <span style={{ color: '#b45309', fontSize: '11px', fontWeight: 600 }}>⚠️ Not Sent</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleResendEmail(selectedApp.id)}
+                    disabled={actionLoading}
+                    className="btn-secondary"
+                    style={{ fontSize: '11px', padding: '3px 8px', whiteSpace: 'nowrap' }}
+                    title="Send or resend registration confirmation and modify link email to driver"
+                  >
+                    ✉️ Resend Email
+                  </button>
                 </div>
                 <div>Address: {selectedApp.residentialAddress}, {selectedApp.postcode}</div>
                 <div>NI Number: <strong>{selectedApp.nationalInsuranceNumber || 'N/A'}</strong></div>

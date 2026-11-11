@@ -50,12 +50,8 @@ export async function POST(req: Request) {
       app.tbmsSyncError = undefined;
     } else if (tbmsResult.alreadyExists) {
       // Driver mobile was already registered in TBMS dispatch
-      app.tbmsSyncStatus = 'SYNCED';
-      app.status = 'ACTIVE';
-      app.syncedName = app.legalName;
-      app.detailsModifiedAfterSync = false;
-      app.lastModifiedFields = [];
-      app.tbmsSyncError = 'Mobile number already registered in TBMS dispatch system. Verified profile updated with latest details.';
+      // Note: TBMS CreateDriver.php is insert-only, so TBMS did NOT update the driver profile.
+      app.tbmsSyncError = 'Mobile number is already registered in TBMS dispatch. CreateDriver.php cannot update existing drivers.';
     } else {
       app.tbmsSyncStatus = 'FAILED';
       app.tbmsSyncError = tbmsResult.error || 'Failed to sync with TBMS';
@@ -64,14 +60,25 @@ export async function POST(req: Request) {
     app.updatedAt = new Date().toISOString();
     const saved = await applicationStore.saveAsync(app);
 
-    if (tbmsResult.success || tbmsResult.alreadyExists) {
+    if (tbmsResult.success && tbmsResult.driverId) {
       return NextResponse.json({
         success: true,
-        message: tbmsResult.success
-          ? `Driver approved & activated in TBMS Dispatch (Driver ID: ${saved.tbmsDriverId})`
-          : `Driver approved & activated. Note: Mobile number is already on file in TBMS dispatch.`,
+        message: `Driver approved & activated in TBMS Dispatch (Driver ID: ${saved.tbmsDriverId})`,
         application: saved,
       });
+    }
+
+    if (tbmsResult.alreadyExists) {
+      return NextResponse.json(
+        {
+          success: false,
+          alreadyExists: true,
+          error:
+            "TBMS dispatch rejected update: 'Mobile number is already in use.' TBMS CreateDriver.php is insert-only and cannot overwrite existing drivers automatically. Please update the driver name directly in the TBMS Admin Console.",
+          application: saved,
+        },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json(

@@ -49,11 +49,11 @@ export default function OnboardingPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(found),
-              }).catch(() => {});
+              }).catch(() => { });
               return true;
             }
           }
-        } catch {}
+        } catch { }
 
         const draft = loadLocalDraft();
         if (
@@ -67,7 +67,7 @@ export default function OnboardingPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(draft),
-          }).catch(() => {});
+          }).catch(() => { });
           return true;
         }
         return false;
@@ -95,7 +95,7 @@ export default function OnboardingPage() {
                 ),
               ];
               localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
-            } catch {}
+            } catch { }
             setSaveStatus('Application loaded from link');
           } else {
             const recovered = tryFallback();
@@ -154,7 +154,7 @@ export default function OnboardingPage() {
             ),
           ];
           localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
 
       // Async background server sync (debounced 600ms) if mobile number or reference exists

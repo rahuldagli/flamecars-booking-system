@@ -270,6 +270,44 @@ Flame Cars London &bull; Compliance Operations
     if (!res.ok) {
       const errMsg = json?.message || responseText || `HTTP ${res.status}`;
       console.error(`[MAILGUN] Error sending email (Status ${res.status}):`, errMsg);
+
+      // If the domain is unverified or forbidden, auto-fallback to verified EU domain mail.uk-ilr.co.uk
+      if (domain !== 'mail.uk-ilr.co.uk' && (errMsg.includes('unverified') || errMsg.includes('Forbidden') || res.status === 403)) {
+        console.log('[MAILGUN] Attempting fallback to verified EU domain mail.uk-ilr.co.uk...');
+        const fallbackEndpoint = `https://api.eu.mailgun.net/v3/mail.uk-ilr.co.uk/messages`;
+        const fallbackForm = new URLSearchParams();
+        fallbackForm.append('from', 'Flame Cars Compliance <onboarding@mail.uk-ilr.co.uk>');
+        fallbackForm.append('to', app.email);
+        fallbackForm.append('subject', subject);
+        fallbackForm.append('text', textBody);
+        fallbackForm.append('html', htmlBody);
+
+        try {
+          const fallbackRes = await fetch(fallbackEndpoint, {
+            method: 'POST',
+            headers: {
+              Authorization: authHeader,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: fallbackForm.toString(),
+          });
+          const fallbackText = await fallbackRes.text();
+          let fallbackJson: any = null;
+          try {
+            fallbackJson = JSON.parse(fallbackText);
+          } catch {}
+          if (fallbackRes.ok) {
+            console.log(`[MAILGUN] Fallback email successfully dispatched to ${app.email}. Message ID:`, fallbackJson?.id);
+            return {
+              success: true,
+              messageId: fallbackJson?.id || 'queued',
+            };
+          }
+        } catch (fErr) {
+          console.error('[MAILGUN] Fallback attempt exception:', fErr);
+        }
+      }
+
       return {
         success: false,
         error: errMsg,
