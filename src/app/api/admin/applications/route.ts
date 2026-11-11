@@ -34,13 +34,13 @@ export async function POST(req: Request) {
     if (Array.isArray(body)) {
       for (const item of body) {
         if (item && (item.id || item.referenceNumber || item.mobileNumber)) {
-          applicationStore.save(item);
+          await applicationStore.saveAsync(item);
         }
       }
     } else if (body && (body.id || body.referenceNumber || body.mobileNumber)) {
-      applicationStore.save(body);
+      await applicationStore.saveAsync(body);
     }
-    const applications = applicationStore.getAll();
+    const applications = await applicationStore.getAllAsync();
     return NextResponse.json({ success: true, count: applications.length, applications });
   } catch (error) {
     console.error('Admin Applications Sync Error:', error);

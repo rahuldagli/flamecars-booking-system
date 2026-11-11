@@ -1,4 +1,4 @@
-import { DriverApplication } from '@/types/onboarding';
+import { DriverApplication, DocumentType } from '@/types/onboarding';
 
 // Server-side in-memory storage (persisted across requests in global for hot-reload and serverless isolate lifetime)
 declare global {
@@ -147,19 +147,43 @@ export const applicationStore = {
   },
 
   save(app: DriverApplication): DriverApplication {
-    if (!app.id) {
-      if (app.referenceNumber || app.mobileNumber) {
-        const existing = this.get(app.referenceNumber || app.mobileNumber);
-        if (existing) {
-          app.id = existing.id;
-          if (!app.referenceNumber) {
-            app.referenceNumber = existing.referenceNumber;
+    const existing = app.id
+      ? this.get(app.id)
+      : app.referenceNumber || app.mobileNumber
+      ? this.get(app.referenceNumber || app.mobileNumber)
+      : undefined;
+
+    if (existing) {
+      if (!app.id) app.id = existing.id;
+      if (!app.referenceNumber) app.referenceNumber = existing.referenceNumber;
+
+      // Crucial: Protect ACTIVE status and TBMS Driver ID from being downgraded by stale drafts
+      if (existing.status === 'ACTIVE' && app.status !== 'ACTIVE') {
+        app.status = 'ACTIVE';
+        app.tbmsDriverId = app.tbmsDriverId || existing.tbmsDriverId;
+        app.tbmsSyncStatus = 'SYNCED';
+      }
+      if (existing.tbmsDriverId && !app.tbmsDriverId) {
+        app.tbmsDriverId = existing.tbmsDriverId;
+        app.tbmsSyncStatus = existing.tbmsSyncStatus || 'SYNCED';
+      }
+      // Preserve approved document reviews from staff
+      if (existing.documents && app.documents) {
+        for (const [docKey, existingDoc] of Object.entries(existing.documents)) {
+          const k = docKey as DocumentType;
+          if (
+            existingDoc &&
+            existingDoc.status === 'APPROVED' &&
+            app.documents[k]?.status !== 'APPROVED'
+          ) {
+            app.documents[k] = existingDoc;
           }
         }
       }
-      if (!app.id) {
-        app.id = 'app_' + Math.random().toString(36).substring(2, 10);
-      }
+    }
+
+    if (!app.id) {
+      app.id = 'app_' + Math.random().toString(36).substring(2, 10);
     }
     if (!app.referenceNumber) {
       const year = new Date().getFullYear();

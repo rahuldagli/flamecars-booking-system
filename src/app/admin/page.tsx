@@ -107,11 +107,38 @@ export default function AdminDashboardPage() {
     setSelectedApp(null);
   }
 
+  // Helper to persist updated application state locally across reloads
+  function persistAppToLocal(app: DriverApplication) {
+    if (typeof window === 'undefined' || !app) return;
+    try {
+      const raw = localStorage.getItem('flamecars_submitted_applications');
+      const list: DriverApplication[] = raw ? JSON.parse(raw) : [];
+      const updated = [
+        app,
+        ...list.filter((a) => a.referenceNumber !== app.referenceNumber && a.id !== app.id),
+      ];
+      localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
+
+      const draftRaw = localStorage.getItem('flamecars_driver_draft_v1');
+      if (draftRaw) {
+        const draft = JSON.parse(draftRaw);
+        if (draft && (draft.id === app.id || draft.referenceNumber === app.referenceNumber)) {
+          localStorage.setItem('flamecars_driver_draft_v1', JSON.stringify({ ...draft, ...app }));
+        }
+      }
+    } catch {}
+  }
+
   // Load applications
   async function loadApplications() {
     setLoading(true);
     try {
-      // 1. Gather any locally saved/submitted applications on this origin
+      // 1. Fetch authoritative applications from server first
+      const res = await fetch('/api/admin/applications');
+      const data = await res.json();
+      const serverApps: DriverApplication[] = res.ok && Array.isArray(data.applications) ? data.applications : [];
+
+      // 2. Gather any locally saved/submitted applications on this browser
       let localApps: DriverApplication[] = [];
       if (typeof window !== 'undefined') {
         try {
@@ -120,49 +147,61 @@ export default function AdminDashboardPage() {
             const parsed = JSON.parse(submittedRaw);
             if (Array.isArray(parsed)) localApps = parsed;
           }
-          // Also check active draft if submitted or referenced
           const draftRaw = localStorage.getItem('flamecars_driver_draft_v1');
           if (draftRaw) {
             const draft = JSON.parse(draftRaw);
-            if (draft && (draft.status === 'SUBMITTED' || draft.referenceNumber) && !localApps.some((a) => a.referenceNumber === draft.referenceNumber)) {
+            if (
+              draft &&
+              (draft.status === 'SUBMITTED' || draft.referenceNumber) &&
+              !localApps.some((a) => a.referenceNumber === draft.referenceNumber)
+            ) {
               localApps.push(draft);
             }
           }
         } catch {}
       }
 
-      // If local applications exist, sync them to server
-      if (localApps.length > 0) {
+      // 3. Build unified map: server apps ALWAYS take precedence over local drafts
+      const appMap = new Map<string, DriverApplication>();
+
+      // First add local apps
+      for (const app of localApps) {
+        const key = app.referenceNumber || app.id;
+        if (key) appMap.set(key, app);
+      }
+
+      // Then overwrite with server apps (server is authoritative)
+      for (const app of serverApps) {
+        const key = app.referenceNumber || app.id;
+        if (key) appMap.set(key, app);
+      }
+
+      const combined = Array.from(appMap.values()).sort(
+        (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+      );
+
+      // 4. Only push local apps to server if they are completely missing on server
+      const missingOnServer = localApps.filter(
+        (loc) => !serverApps.some((srv) => srv.id === loc.id || srv.referenceNumber === loc.referenceNumber)
+      );
+      if (missingOnServer.length > 0) {
+        fetch('/api/admin/applications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(missingOnServer),
+        }).catch(() => {});
+      }
+
+      // 5. Keep local storage refreshed with the latest authoritative server records
+      if (typeof window !== 'undefined' && serverApps.length > 0) {
         try {
-          await fetch('/api/admin/applications', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(localApps),
-          });
+          localStorage.setItem('flamecars_submitted_applications', JSON.stringify(combined));
         } catch {}
       }
 
-      const res = await fetch('/api/admin/applications');
-      const data = await res.json();
-      if (res.ok) {
-        const serverApps: DriverApplication[] = data.applications || [];
-        const appMap = new Map<string, DriverApplication>();
-        for (const app of localApps) {
-          const key = app.referenceNumber || app.id;
-          if (key) appMap.set(key, app);
-        }
-        for (const app of serverApps) {
-          const key = app.referenceNumber || app.id;
-          if (key) appMap.set(key, app);
-        }
-        const combined = Array.from(appMap.values()).sort(
-          (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
-        );
-
-        setApplications(combined);
-        if (combined.length === 0) {
-          seedDemoDriver();
-        }
+      setApplications(combined);
+      if (combined.length === 0) {
+        seedDemoDriver();
       }
     } catch (e) {
       console.error(e);
@@ -380,6 +419,7 @@ export default function AdminDashboardPage() {
       if (res.ok && resData.application) {
         setSelectedApp(resData.application);
         setApplications((prev) => prev.map((a) => (a.id === selectedApp.id ? resData.application : a)));
+        persistAppToLocal(resData.application);
       }
     } catch (err) {
       console.warn('Network sync for doc review:', err);
@@ -402,11 +442,12 @@ export default function AdminDashboardPage() {
       });
       const data = await res.json();
 
-      if (res.ok) {
+      if (res.ok && data.application) {
         setSelectedApp(data.application);
         setApplications((prev) => prev.map((a) => (a.id === appId ? data.application : a)));
+        persistAppToLocal(data.application);
         setActionMessage({
-          text: `Success! Driver is now ACTIVE in TBMS (ID: ${data.application.tbmsDriverId})`,
+          text: `Success! Driver is now ACTIVE in TBMS (ID: ${data.application.tbmsDriverId || 'Synced'}) ✓`,
           type: 'success',
         });
       } else {
