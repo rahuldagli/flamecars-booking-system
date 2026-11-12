@@ -37,10 +37,19 @@ export default function Step5Review({
     setSubmitting(true);
 
     try {
+      // Strip heavy base64 strings before submitting (files are stored separately via /api/onboarding/document-file)
+      const shallowDocs: Record<string, any> = {};
+      if (data.documents) {
+        for (const [k, d] of Object.entries(data.documents)) {
+          shallowDocs[k] = d ? { ...d, dataUrl: d.dataUrl && d.dataUrl.length > 500 ? '[stored-on-server]' : d.dataUrl } : null;
+        }
+      }
+      const lightweightPayload = { ...data, documents: shallowDocs };
+
       const res = await fetch('/api/onboarding/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(lightweightPayload),
       });
 
       const resData = await res.json();

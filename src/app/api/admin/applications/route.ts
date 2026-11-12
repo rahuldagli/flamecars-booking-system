@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { applicationStore, stripOversizedData } from '@/lib/serverStore';
+import { requireAdminAuth } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await requireAdminAuth(req);
+  if (!auth.authenticated) return auth.response;
+
   try {
     const rawApps = await applicationStore.getAllAsync();
     const applications = rawApps.map(stripOversizedData);
@@ -30,6 +34,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireAdminAuth(req);
+  if (!auth.authenticated) return auth.response;
+
   try {
     const body = await req.json();
     if (Array.isArray(body)) {

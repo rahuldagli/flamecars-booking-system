@@ -12,27 +12,44 @@ interface Step3DocumentsProps {
   onBack: () => void;
 }
 
-// Helper to convert AVIF/HEIC images to JPEG in modern browsers via HTMLCanvasElement
-// Ensures wide compatibility with LLM multimodal vision APIs (which only accept JPEG, PNG, GIF, WEBP)
-async function transcodeAvifToJpeg(dataUrl: string): Promise<string> {
+// Helper to compress/transcode images in browser via HTMLCanvasElement
+// Keeps file size small (~150-400 KB) to protect localStorage and Cloudflare Worker CPU limits
+async function normalizeAndCompressImage(dataUrl: string, mimeType: string, filename: string): Promise<string> {
   if (typeof window === 'undefined') return dataUrl;
+  const isImage = mimeType.startsWith('image/') || /\.(jpg|jpeg|png|webp|avif|heic|gif)$/i.test(filename);
+  if (!isImage) return dataUrl;
+
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       try {
+        const MAX_DIM = 1600;
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width >= height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
         const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          const jpeg = canvas.toDataURL('image/jpeg', 0.92);
+          ctx.drawImage(img, 0, 0, width, height);
+          const jpeg = canvas.toDataURL('image/jpeg', 0.82);
           resolve(jpeg);
           return;
         }
       } catch (err) {
-        console.warn('[AI OCR] Canvas transcode error:', err);
+        console.warn('[AI OCR] Canvas compress error:', err);
       }
       resolve(dataUrl);
     };
@@ -58,14 +75,30 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
     reader.onload = async (e) => {
       let dataUrl = e.target?.result as string;
 
-      // Transcode AVIF on client via canvas if needed for maximum compatibility
-      if (file.type === 'image/avif' || file.name.toLowerCase().endsWith('.avif')) {
-        try {
-          dataUrl = await transcodeAvifToJpeg(dataUrl);
-        } catch (transcodeErr) {
-          console.warn('[AI OCR] Client AVIF transcode fallback:', transcodeErr);
-        }
+      // Compress and normalize images in client browser to keep payloads lightweight (~150-400KB)
+      try {
+        dataUrl = await normalizeAndCompressImage(dataUrl, file.type || '', file.name);
+      } catch (transcodeErr) {
+        console.warn('[AI OCR] Client image compress fallback:', transcodeErr);
       }
+
+      const appId = data.id || ('app_' + Math.random().toString(36).substring(2, 11));
+      if (!data.id) {
+        onChange({ id: appId });
+      }
+
+      // Persist individual document file to server storage for staff preview (Fix H3)
+      fetch('/api/onboarding/document-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appId,
+          docType: type,
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          dataUrl,
+        }),
+      }).catch((err) => console.warn('[DOC FILE UPLOAD]', err));
       const docId = 'doc_' + Math.random().toString(36).substring(2, 9);
 
       // Create document entry in analyzing state
@@ -98,7 +131,7 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            appId: data.id,
+            appId,
             docType: type,
             filename: file.name,
             dataUrl,
@@ -180,11 +213,15 @@ export default function Step3Documents({ data, onChange, onNext, onBack }: Step3
 
           onChange(fullUpdatedApp);
 
-          // Save directly to DB draft endpoint as well
+          // Save lightweight draft to DB draft endpoint (without heavy base64 strings)
+          const shallowDocs: Record<string, any> = {};
+          for (const [k, d] of Object.entries(updatedDocuments)) {
+            shallowDocs[k] = d ? { ...d, dataUrl: undefined } : null;
+          }
           fetch('/api/onboarding/draft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(fullUpdatedApp),
+            body: JSON.stringify({ ...fullUpdatedApp, id: appId, documents: shallowDocs }),
           }).catch((err) => console.warn('Autosave to draft after OCR:', err));
         } else {
           // Finish analyzing state even if error

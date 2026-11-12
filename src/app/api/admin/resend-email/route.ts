@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { applicationStore } from '@/lib/serverStore';
 import { sendDriverRegistrationEmail, getAppBaseUrl } from '@/lib/mailgun';
+import { requireAdminAuth } from '@/lib/auth';
 
 export async function POST(req: Request) {
+  const auth = await requireAdminAuth(req);
+  if (!auth.authenticated) return auth.response;
+
   try {
     const { appId } = await req.json();
     if (!appId) {
@@ -58,4 +62,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error?.message || 'Failed to resend email' }, { status: 500 });
   }
 }
-

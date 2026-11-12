@@ -47,15 +47,23 @@ export async function syncDriverToTbms(
   app: DriverApplication,
   options?: TbmsSyncOptions
 ): Promise<TbmsSyncResult> {
-  const pubKey = getEnv('TBMS_PUBLIC_KEY', 'TBMS-PUB-14D2D2C9B1E1C283E8A995B9');
-  const secKey = getEnv('TBMS_SECRET_KEY', 'TBMS-SEC-1594B731DD3996EE6CD0D44DC9B1598D5B68');
+  const pubKey = getEnv('TBMS_PUBLIC_KEY');
+  const secKey = getEnv('TBMS_SECRET_KEY');
   const baseUrl = getEnv('TBMS_BASE_URL', 'https://tbmslive.org/api');
+
+  if (!pubKey || !secKey) {
+    return {
+      success: false,
+      error: 'TBMS API credentials (TBMS_PUBLIC_KEY / TBMS_SECRET_KEY) are not configured in server environment.',
+    };
+  }
+
   const createDriverUrl = `${baseUrl.replace(/\/$/, '')}/CreateDriver.php`;
 
   // App Base URL for compliance document inspection
   const appBaseUrl =
     options?.baseUrl ||
-    getEnv('NEXT_PUBLIC_APP_URL', 'https://flamecars.co.uk').replace(/\/$/, '');
+    getEnv('NEXT_PUBLIC_APP_URL', 'https://flamecars-booking-system.rahuldagli.workers.dev').replace(/\/$/, '');
   const documentInspectionUrl = `${appBaseUrl}/admin?ref=${encodeURIComponent(app.referenceNumber || app.id)}`;
 
   // Determine active/inactive status flag

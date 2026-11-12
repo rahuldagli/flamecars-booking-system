@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import { applicationStore } from '@/lib/serverStore';
 import { syncDriverToTbms } from '@/lib/tbms';
 import { getAppBaseUrl } from '@/lib/mailgun';
+import { requireAdminAuth } from '@/lib/auth';
 
 export async function POST(req: Request) {
+  const auth = await requireAdminAuth(req);
+  if (!auth.authenticated) return auth.response;
+
   try {
     const { appId, forceSync } = await req.json();
 
@@ -15,7 +19,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Application not found' }, { status: 404 });
     }
 
-    // Verify all mandatory documents are approved before sync unless forced by staff
     const mandatoryKeys = [
       'TFL_PHV_DRIVER_BADGE_FRONT',
       'DVLA_DRIVING_LICENCE_FRONT',
@@ -33,10 +36,10 @@ export async function POST(req: Request) {
       );
     }
 
+    const prevSyncStatus = app.tbmsSyncStatus;
     app.tbmsSyncStatus = 'PENDING';
     await applicationStore.saveAsync(app);
 
-    // Call TBMS API server-to-server with status: ACTIVE and baseUrl for document inspection
     const baseUrl = getAppBaseUrl(req);
     const tbmsResult = await syncDriverToTbms(app, { status: 'ACTIVE', baseUrl });
 
@@ -49,9 +52,10 @@ export async function POST(req: Request) {
       app.lastModifiedFields = [];
       app.tbmsSyncError = undefined;
     } else if (tbmsResult.alreadyExists) {
-      // Driver mobile was already registered in TBMS dispatch
-      // Note: TBMS CreateDriver.php is insert-only, so TBMS did NOT update the driver profile.
-      app.tbmsSyncError = 'Mobile number is already registered in TBMS dispatch. CreateDriver.php cannot update existing drivers.';
+      // Fix H5: Resolve PENDING status rather than leaving it stuck
+      app.tbmsSyncStatus = app.tbmsDriverId ? 'SYNCED' : (prevSyncStatus === 'SYNCED' ? 'SYNCED' : 'FAILED');
+      app.tbmsSyncError =
+        'Mobile number is already registered in TBMS dispatch. CreateDriver.php cannot update existing drivers.';
     } else {
       app.tbmsSyncStatus = 'FAILED';
       app.tbmsSyncError = tbmsResult.error || 'Failed to sync with TBMS';

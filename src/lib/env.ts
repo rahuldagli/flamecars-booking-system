@@ -5,35 +5,20 @@
  * 1. Node.js runtime (local dev / next dev / next build)
  * 2. Cloudflare Workers / Pages runtime (Cloudflare Dashboard Variables & Secrets)
  * 3. Cloudflare context bindings (@opennextjs/cloudflare getCloudflareContext)
- * 4. Application built-in defaults (ensuring zero downtime in case of edge binding delays)
+ * 4. Non-secret application configuration defaults
+ *
+ * NOTE: Secrets (API keys, passwords, session secrets) MUST be configured in
+ * .env.local (local dev) or Cloudflare Worker Variables & Secrets (production).
  */
 
-function safeDecode(b64: string): string {
-  try {
-    if (typeof atob === 'function') {
-      return atob(b64);
-    }
-    if (typeof Buffer !== 'undefined') {
-      return Buffer.from(b64, 'base64').toString('utf-8');
-    }
-  } catch {}
-  return '';
-}
-
-const DEFAULT_FALLBACKS: Record<string, () => string> = {
-  // Built-in fallback keys decoded at runtime to prevent secret-scanning false positives
-  OPENROUTER_API_KEY: () => safeDecode('c2stb3ItdjEtOTRmZGEzMTgyNjUzMDg0ODBjM2MwNDY2OWFiZWUyMmQ3YzEwZTYwZWRlODFmYTYxNTFiOGMwNGIzNjU4YmEwMw=='),
-  OPENROUTER_MODEL: () => 'google/gemini-2.5-flash',
-  TBMS_PUBLIC_KEY: () => 'TBMS-PUB-14D2D2C9B1E1C283E8A995B9',
-  TBMS_SECRET_KEY: () => 'TBMS-SEC-1594B731DD3996EE6CD0D44DC9B1598D5B68',
-  TBMS_BASE_URL: () => 'https://tbmslive.org/api',
-  STAFF_ADMIN_EMAIL: () => 'admin@flamecars.co.uk',
-  STAFF_ADMIN_PASSWORD: () => 'FlameCars#Admin2026!Sec',
-  MAILGUN_API_KEY: () => safeDecode('NWMyYThiMTI5NzEwYjA4Y2FlNDZjMmIyNDEwZjEyOGQtNGU2ODYwNjQtMWU1YjRlZGE='),
-  MAILGUN_DOMAIN: () => 'mail.uk-ilr.co.uk',
-  MAILGUN_HOST: () => 'https://api.eu.mailgun.net',
-  MAILGUN_FROM: () => 'Flame Cars Compliance <onboarding@mail.uk-ilr.co.uk>',
-  NEXT_PUBLIC_APP_URL: () => 'https://flamecars-booking-system.rahuldagli.workers.dev',
+const NON_SECRET_DEFAULTS: Record<string, string> = {
+  OPENROUTER_MODEL: 'google/gemini-2.5-flash',
+  TBMS_BASE_URL: 'https://tbmslive.org/api',
+  STAFF_ADMIN_EMAIL: 'admin@flamecars.co.uk',
+  MAILGUN_DOMAIN: 'mail.uk-ilr.co.uk',
+  MAILGUN_HOST: 'https://api.eu.mailgun.net',
+  MAILGUN_FROM: 'Flame Cars Compliance <onboarding@mail.uk-ilr.co.uk>',
+  NEXT_PUBLIC_APP_URL: 'https://flamecars-booking-system.rahuldagli.workers.dev',
 };
 
 export function getEnv(key: string, defaultValue = ''): string {
@@ -75,10 +60,9 @@ export function getEnv(key: string, defaultValue = ''): string {
     // Non-fatal
   }
 
-  // 4. Default fallbacks from application config
-  if (DEFAULT_FALLBACKS[key]) {
-    const fb = DEFAULT_FALLBACKS[key]();
-    if (fb && fb.length > 0) return fb;
+  // 4. Non-secret configuration defaults only
+  if (NON_SECRET_DEFAULTS[key]) {
+    return NON_SECRET_DEFAULTS[key];
   }
 
   return defaultValue;
@@ -104,9 +88,8 @@ export async function getAsyncEnv(key: string, defaultValue = ''): Promise<strin
     // Non-fatal
   }
 
-  if (DEFAULT_FALLBACKS[key]) {
-    const fb = DEFAULT_FALLBACKS[key]();
-    if (fb && fb.length > 0) return fb;
+  if (NON_SECRET_DEFAULTS[key]) {
+    return NON_SECRET_DEFAULTS[key];
   }
 
   return defaultValue;

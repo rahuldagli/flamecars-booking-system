@@ -109,11 +109,10 @@ export async function sendDriverRegistrationEmail(
         <div style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 26px; font-weight: 800; color: #ea580c; letter-spacing: 2px;">
           ${escapeHtml(app.referenceNumber)}
         </div>
-        ${
-          app.tbmsDriverId
-            ? `<div style="margin-top: 8px; font-size: 12px; color: #166534; font-weight: 600;">✓ Synced to TBMS Dispatch Engine (Driver ID: #${escapeHtml(app.tbmsDriverId)})</div>`
-            : ''
-        }
+        ${app.tbmsDriverId
+      ? `<div style="margin-top: 8px; font-size: 12px; color: #166534; font-weight: 600;">✓ Synced to TBMS Dispatch Engine (Driver ID: #${escapeHtml(app.tbmsDriverId)})</div>`
+      : ''
+    }
       </div>
 
       <!-- Action Button -->
@@ -291,7 +290,7 @@ Flame Cars London &bull; Compliance Operations
           let fallbackJson: any = null;
           try {
             fallbackJson = JSON.parse(fallbackText);
-          } catch {}
+          } catch { }
           if (fallbackRes.ok) {
             console.log(`[MAILGUN] Fallback email successfully dispatched to ${app.email}. Message ID:`, fallbackJson?.id);
             return {

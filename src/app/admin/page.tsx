@@ -130,7 +130,29 @@ export default function AdminDashboardPage() {
     setSelectedApp(null);
   }
 
-  // Helper to persist updated application state locally across reloads
+  // Authenticated fetch helper for /api/admin/* endpoints
+  async function adminFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('fc_staff_token') : null;
+    const headers = new Headers(options.headers || {});
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    const res = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'same-origin',
+    });
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('fc_staff_token');
+      }
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+    }
+    return res;
+  }
+
+  // Helper to persist updated application state locally across reloads (admin-only key, does not touch driver draft)
   function persistAppToLocal(app: DriverApplication) {
     if (typeof window === 'undefined' || !app) return;
     try {
@@ -141,15 +163,7 @@ export default function AdminDashboardPage() {
         ...list.filter((a) => a.referenceNumber !== app.referenceNumber && a.id !== app.id),
       ];
       localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
-
-      const draftRaw = localStorage.getItem('flamecars_driver_draft_v1');
-      if (draftRaw) {
-        const draft = JSON.parse(draftRaw);
-        if (draft && (draft.id === app.id || draft.referenceNumber === app.referenceNumber)) {
-          localStorage.setItem('flamecars_driver_draft_v1', JSON.stringify({ ...draft, ...app }));
-        }
-      }
-    } catch {}
+    } catch { }
   }
 
   // Helper to strip heavy base64 strings before sending over wire
@@ -176,7 +190,7 @@ export default function AdminDashboardPage() {
     if (showSpinner) setLoading(true);
     try {
       // 1. Fetch authoritative applications from server first
-      const res = await fetch('/api/admin/applications');
+      const res = await adminFetch('/api/admin/applications');
       const data = await res.json();
       const serverApps: DriverApplication[] = res.ok && Array.isArray(data.applications) ? data.applications : [];
 
@@ -200,30 +214,38 @@ export default function AdminDashboardPage() {
               localApps.push(draft);
             }
           }
-        } catch {}
+        } catch { }
       }
 
-      // 3. Build unified map: compare timestamps so newer edits always win
+      // 3. Build unified map: server-authoritative ACTIVE status & TBMS IDs always win (Fix H1)
       const appMap = new Map<string, DriverApplication>();
 
-      const allCandidates = [...localApps, ...serverApps];
-      for (const app of allCandidates) {
-        const key = (app.referenceNumber || app.id || '').toLowerCase().trim();
+      for (const localApp of localApps) {
+        const key = (localApp.referenceNumber || localApp.id || '').toLowerCase().trim();
+        if (key) appMap.set(key, localApp);
+      }
+
+      for (const srvApp of serverApps) {
+        const key = (srvApp.referenceNumber || srvApp.id || '').toLowerCase().trim();
         if (!key) continue;
 
         const existing = appMap.get(key);
         if (!existing) {
-          appMap.set(key, app);
+          appMap.set(key, srvApp);
         } else {
-          const appTime = new Date(app.updatedAt || app.submittedAt || 0).getTime();
-          const existTime = new Date(existing.updatedAt || existing.submittedAt || 0).getTime();
-          if (appTime >= existTime) {
-            // Keep newer updates, retaining any TBMS IDs or approved reviews
-            appMap.set(key, { ...existing, ...app });
-          } else {
-            // Existing is newer, merge any non-empty fields
-            appMap.set(key, { ...app, ...existing });
+          const srvTime = new Date(srvApp.updatedAt || srvApp.submittedAt || 0).getTime();
+          const locTime = new Date(existing.updatedAt || existing.submittedAt || 0).getTime();
+          const merged = srvTime >= locTime ? { ...existing, ...srvApp } : { ...srvApp, ...existing };
+
+          // Server-authoritative status & TBMS activation must never be reverted by stale localStorage
+          if (srvApp.status === 'ACTIVE' || existing.status === 'ACTIVE') {
+            merged.status = 'ACTIVE';
           }
+          if (srvApp.tbmsDriverId) {
+            merged.tbmsDriverId = srvApp.tbmsDriverId;
+            merged.tbmsSyncStatus = srvApp.tbmsSyncStatus || 'SYNCED';
+          }
+          appMap.set(key, merged);
         }
       }
 
@@ -238,11 +260,11 @@ export default function AdminDashboardPage() {
         );
         if (missingOnServer.length > 0) {
           const sanitizedPayload = missingOnServer.map(sanitizeForSync);
-          fetch('/api/admin/applications', {
+          adminFetch('/api/admin/applications', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(sanitizedPayload),
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
 
@@ -250,7 +272,7 @@ export default function AdminDashboardPage() {
       if (typeof window !== 'undefined' && combined.length > 0) {
         try {
           localStorage.setItem('flamecars_submitted_applications', JSON.stringify(combined));
-        } catch {}
+        } catch { }
       }
 
       setApplications(combined);
@@ -264,14 +286,10 @@ export default function AdminDashboardPage() {
             (a.referenceNumber && a.referenceNumber === currentSelected.referenceNumber) ||
             (a.mobileNumber &&
               a.mobileNumber.replace(/\s+/g, '') ===
-                (currentSelected.mobileNumber || '').replace(/\s+/g, ''))
+              (currentSelected.mobileNumber || '').replace(/\s+/g, ''))
         );
         return fresh || currentSelected;
       });
-
-      if (combined.length === 0) {
-        seedDemoDriver();
-      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -473,7 +491,7 @@ export default function AdminDashboardPage() {
     setActionMessage({ text: `Document successfully ${action.toLowerCase()}d ✓`, type: 'success' });
 
     try {
-      const res = await fetch('/api/admin/document', {
+      const res = await adminFetch('/api/admin/document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -481,7 +499,7 @@ export default function AdminDashboardPage() {
           docType,
           action,
           reason,
-          application: optimisticApp,
+          application: sanitizeForSync(optimisticApp),
         }),
       });
       const resData = await res.json();
@@ -504,7 +522,7 @@ export default function AdminDashboardPage() {
     setActionMessage({ text: 'Syncing driver with TBMS server (CreateDriver.php)...', type: 'success' });
 
     try {
-      const res = await fetch('/api/admin/tbms-sync', {
+      const res = await adminFetch('/api/admin/tbms-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appId, forceSync: true }),
@@ -540,7 +558,7 @@ export default function AdminDashboardPage() {
     setActionMessage({ text: 'Dispatching registration email via Mailgun...', type: 'success' });
 
     try {
-      const res = await fetch('/api/admin/resend-email', {
+      const res = await adminFetch('/api/admin/resend-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appId }),
@@ -586,10 +604,10 @@ export default function AdminDashboardPage() {
     setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
     persistAppToLocal(updated);
     try {
-      await fetch('/api/admin/applications', {
+      await adminFetch('/api/admin/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
+        body: JSON.stringify(sanitizeForSync(updated)),
       });
       setActionMessage({ text: 'TBMS driver name update marked as confirmed ✓', type: 'success' });
     } catch {
@@ -630,7 +648,7 @@ export default function AdminDashboardPage() {
     setActionMessage({ text: `Looking up applicant "${identifier}"...`, type: 'success' });
 
     try {
-      const res = await fetch(`/api/onboarding/draft?identifier=${encodeURIComponent(identifier.trim())}`);
+      const res = await adminFetch(`/api/onboarding/draft?identifier=${encodeURIComponent(identifier.trim())}`);
       const data = await res.json();
       if (res.ok && data.application) {
         const found: DriverApplication = data.application;
@@ -981,21 +999,21 @@ export default function AdminDashboardPage() {
                         {app.legalName || 'Draft Applicant'}
                         {(app.detailsModifiedAfterSync ||
                           (app.syncedName && app.syncedName.trim() !== app.legalName.trim())) && (
-                          <span
-                            style={{
-                              marginLeft: '6px',
-                              fontSize: '10px',
-                              background: '#fef3c7',
-                              color: '#b45309',
-                              padding: '1px 6px',
-                              borderRadius: '4px',
-                              border: '1px solid #fde68a',
-                            }}
-                            title="Driver updated details after initial registration/sync"
-                          >
-                            UPDATED
-                          </span>
-                        )}
+                            <span
+                              style={{
+                                marginLeft: '6px',
+                                fontSize: '10px',
+                                background: '#fef3c7',
+                                color: '#b45309',
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                border: '1px solid #fde68a',
+                              }}
+                              title="Driver updated details after initial registration/sync"
+                            >
+                              UPDATED
+                            </span>
+                          )}
                       </div>
                       <span
                         style={{
@@ -1111,60 +1129,60 @@ export default function AdminDashboardPage() {
             {/* Driver Name / Details Modification Alert for Staff */}
             {(selectedApp.detailsModifiedAfterSync ||
               (selectedApp.syncedName && selectedApp.syncedName.trim() !== selectedApp.legalName.trim())) && (
-              <div
-                style={{
-                  marginBottom: '16px',
-                  padding: '14px 18px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: '#fffbeb',
-                  border: '1px solid #f59e0b',
-                  color: '#92400e',
-                  fontSize: '13px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, color: '#b45309', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '16px' }}>⚠️</span>
-                  <span>Driver Name Updated by Applicant</span>
+                <div
+                  style={{
+                    marginBottom: '16px',
+                    padding: '14px 18px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: '#fffbeb',
+                    border: '1px solid #f59e0b',
+                    color: '#92400e',
+                    fontSize: '13px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, color: '#b45309', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '16px' }}>⚠️</span>
+                    <span>Driver Name Updated by Applicant</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#78350f', lineHeight: 1.5 }}>
+                    Applicant updated full legal name to <strong>{selectedApp.legalName}</strong>
+                    {selectedApp.syncedName && (
+                      <span> (previously registered / synced in TBMS as <em>{selectedApp.syncedName}</em>)</span>
+                    )}.
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#b45309', marginTop: '6px' }}>
+                    Note: TBMS Dispatch API (<code>CreateDriver.php</code>) is insert-only and rejects duplicate mobile numbers. To ensure TBMS dispatchers see the updated name, update the name directly in the TBMS Admin Console, or click below:
+                  </div>
+                  <div style={{ marginTop: '10px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleTbmsSync(selectedApp.id)}
+                      disabled={actionLoading}
+                      className="btn-secondary"
+                      style={{ fontSize: '12px', padding: '6px 12px' }}
+                    >
+                      🔄 Push Re-sync Attempt
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyTbmsDetails}
+                      className="btn-secondary"
+                      style={{ fontSize: '12px', padding: '6px 12px' }}
+                    >
+                      📋 Copy Updated Details for TBMS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAcknowledgeNameUpdate}
+                      disabled={actionLoading}
+                      className="btn-primary"
+                      style={{ fontSize: '12px', padding: '6px 12px', background: '#059669', borderColor: '#059669' }}
+                    >
+                      ✓ Mark TBMS Name Update Confirmed
+                    </button>
+                  </div>
                 </div>
-                <div style={{ fontSize: '13px', color: '#78350f', lineHeight: 1.5 }}>
-                  Applicant updated full legal name to <strong>{selectedApp.legalName}</strong>
-                  {selectedApp.syncedName && (
-                    <span> (previously registered / synced in TBMS as <em>{selectedApp.syncedName}</em>)</span>
-                  )}.
-                </div>
-                <div style={{ fontSize: '12px', color: '#b45309', marginTop: '6px' }}>
-                  Note: TBMS Dispatch API (<code>CreateDriver.php</code>) is insert-only and rejects duplicate mobile numbers. To ensure TBMS dispatchers see the updated name, update the name directly in the TBMS Admin Console, or click below:
-                </div>
-                <div style={{ marginTop: '10px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => handleTbmsSync(selectedApp.id)}
-                    disabled={actionLoading}
-                    className="btn-secondary"
-                    style={{ fontSize: '12px', padding: '6px 12px' }}
-                  >
-                    🔄 Push Re-sync Attempt
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCopyTbmsDetails}
-                    className="btn-secondary"
-                    style={{ fontSize: '12px', padding: '6px 12px' }}
-                  >
-                    📋 Copy Updated Details for TBMS
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAcknowledgeNameUpdate}
-                    disabled={actionLoading}
-                    className="btn-primary"
-                    style={{ fontSize: '12px', padding: '6px 12px', background: '#059669', borderColor: '#059669' }}
-                  >
-                    ✓ Mark TBMS Name Update Confirmed
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
 
             {/* Document Name Discrepancy Notice for Staff */}
             {selectedApp.nameMismatchConfirmed && (
@@ -1345,9 +1363,8 @@ export default function AdminDashboardPage() {
                         {doc ? (
                           <>
                             <span
-                              className={`badge badge-${
-                                doc.status === 'APPROVED' ? 'approved' : doc.status === 'REJECTED' ? 'suspended' : 'review'
-                              }`}
+                              className={`badge badge-${doc.status === 'APPROVED' ? 'approved' : doc.status === 'REJECTED' ? 'suspended' : 'review'
+                                }`}
                               style={{ fontSize: '11px' }}
                             >
                               {doc.status}
@@ -1400,6 +1417,7 @@ export default function AdminDashboardPage() {
         isOpen={!!inspectDocType && !!selectedApp && !!selectedApp.documents[inspectDocType]}
         onClose={() => setInspectDocType(null)}
         doc={inspectDocType && selectedApp ? selectedApp.documents[inspectDocType] : null}
+        appId={selectedApp?.id}
         applicantName={selectedApp?.legalName}
         isStaff={true}
         onTriggerAiExtract={async (docType) => {

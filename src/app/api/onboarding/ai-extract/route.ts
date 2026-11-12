@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { DocumentType } from '@/types/onboarding';
-import { applicationStore } from '@/lib/serverStore';
+import { applicationStore, documentFileStore } from '@/lib/serverStore';
 import { getEnv, getAsyncEnv } from '@/lib/env';
 
 interface ExtractRequest {
@@ -191,9 +191,20 @@ export async function POST(req: Request) {
     extractedData.extractedAt = new Date().toISOString();
     extractedData.filename = filename;
 
-    // 3. Automatically persist to DB if appId is provided and confidence is genuine
+    // 3. Automatically persist to DB if appId is provided
     if (appId) {
-      const app = applicationStore.get(appId);
+      if (processedDataUrl && processedDataUrl.length > 500) {
+        await documentFileStore.saveAsync({
+          appId,
+          docType,
+          filename: filename || 'document',
+          mimeType: processedDataUrl.startsWith('data:application/pdf') ? 'application/pdf' : 'image/jpeg',
+          dataUrl: processedDataUrl,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      const app = await applicationStore.getAsync(appId);
       if (app) {
         if (app.documents[docType]) {
           app.documents[docType]!.aiExtractedData = extractedData as any;
@@ -234,7 +245,7 @@ export async function POST(req: Request) {
           }
         }
 
-        applicationStore.save(app);
+        await applicationStore.saveAsync(app);
         console.log(`[AI OCR ENGINE] Automatically updated application #${app.id}`);
       }
     }

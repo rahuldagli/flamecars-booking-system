@@ -11,26 +11,37 @@ interface ResumeModalProps {
 
 export default function ResumeModal({ isOpen, onClose, onResume }: ResumeModalProps) {
   const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
+  const isRefCode = /^(flm-drv-|app_)/i.test(identifier.trim());
+
   async function handleResume() {
-    if (!identifier.trim()) {
+    const cleanId = identifier.trim();
+    if (!cleanId) {
       setError('Please enter your mobile number or reference code');
+      return;
+    }
+    if (!isRefCode && !email.trim()) {
+      setError('Please enter your registered email address to verify your identity');
       return;
     }
     setError('');
     setLoading(true);
 
     try {
-      // Find draft application directly by mobile or reference number
-      const draftRes = await fetch(`/api/onboarding/draft?identifier=${encodeURIComponent(identifier)}`);
+      const qs = new URLSearchParams({ identifier: cleanId });
+      if (!isRefCode && email.trim()) {
+        qs.set('email', email.trim());
+      }
+      const draftRes = await fetch(`/api/onboarding/draft?${qs.toString()}`);
       const draftData = await draftRes.json();
 
       if (!draftRes.ok || !draftData.application) {
-        setError('No application found with that mobile number or reference code.');
+        setError(draftData.error || 'No application found matching those details.');
         setLoading(false);
         return;
       }
@@ -81,7 +92,7 @@ export default function ResumeModal({ isOpen, onClose, onResume }: ResumeModalPr
         </div>
 
         <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
-          Enter the UK mobile number or application reference code (e.g. FLM-DRV-...) you used when starting your application.
+          Enter your application reference code (e.g. FLM-DRV-...), or your UK mobile number together with your registered email address.
         </p>
 
         {error && (
@@ -101,17 +112,32 @@ export default function ResumeModal({ isOpen, onClose, onResume }: ResumeModalPr
 
         <div>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-            Mobile Number or Reference Code
+            Reference Code or Mobile Number
           </label>
           <input
             type="text"
-            placeholder="e.g. 07700 900123 or FLM-DRV-..."
+            placeholder="e.g. FLM-DRV-2026-XXXXXX or 07700 900123"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
-            style={{ marginBottom: '18px' }}
+            style={{ marginBottom: '14px' }}
           />
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          {!isRefCode && (
+            <>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                Registered Email Address
+              </label>
+              <input
+                type="email"
+                placeholder="e.g. driver@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{ marginBottom: '18px' }}
+              />
+            </>
+          )}
+
+          <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
             <button
               onClick={onClose}
               className="btn-secondary"

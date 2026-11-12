@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
-import { getEnv } from '@/lib/env';
+import { getAsyncEnv } from '@/lib/env';
+import { signStaffToken } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
-    const expectedEmail = getEnv('STAFF_ADMIN_EMAIL', 'admin@flamecars.co.uk').toLowerCase();
-    const expectedPassword = getEnv('STAFF_ADMIN_PASSWORD', 'FlameCars#Admin2026!Sec');
+    const expectedEmail = (await getAsyncEnv('STAFF_ADMIN_EMAIL', 'admin@flamecars.co.uk')).toLowerCase();
+    const expectedPassword = await getAsyncEnv('STAFF_ADMIN_PASSWORD');
+
+    if (!expectedPassword) {
+      return NextResponse.json(
+        { error: 'Staff authentication is not configured (missing STAFF_ADMIN_PASSWORD).' },
+        { status: 500 }
+      );
+    }
 
     const { email, password } = await req.json();
 
@@ -22,8 +30,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Generate secure session token
-    const token = 'stf_' + Buffer.from(`${inputEmail}:${Date.now()}`).toString('base64');
+    // Generate HMAC-SHA256 signed session token
+    const token = await signStaffToken(inputEmail);
 
     const response = NextResponse.json({
       success: true,
@@ -36,7 +44,7 @@ export async function POST(req: Request) {
       token,
     });
 
-    // Set secure cookie
+    // Set secure httpOnly cookie
     response.cookies.set('staff_session_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

@@ -8,6 +8,7 @@ interface DocumentPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   doc: UploadedDoc | null;
+  appId?: string;
   applicantName?: string;
   isStaff?: boolean;
   onTriggerAiExtract?: (docType: DocumentType) => Promise<void>;
@@ -19,6 +20,7 @@ export default function DocumentPreviewModal({
   isOpen,
   onClose,
   doc,
+  appId,
   applicantName,
   isStaff = false,
   onTriggerAiExtract,
@@ -31,6 +33,31 @@ export default function DocumentPreviewModal({
   const [activeTab, setActiveTab] = useState<'preview' | 'ai-data' | 'raw-text'>('preview');
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfViewMode, setPdfViewMode] = useState<'native' | 'certificate'>('native');
+  const [fetchedDataUrl, setFetchedDataUrl] = useState<string | null>(null);
+
+  const effectiveDataUrl =
+    doc?.dataUrl && !doc.dataUrl.startsWith('[stored-')
+      ? doc.dataUrl
+      : fetchedDataUrl || undefined;
+
+  // Fetch full document file on-demand for staff preview if stripped from list payload (Fix H3)
+  useEffect(() => {
+    setFetchedDataUrl(null);
+    if (!isOpen || !doc || !isStaff || !appId) return;
+    if (doc.dataUrl && !doc.dataUrl.startsWith('[stored-')) return;
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('fc_staff_token') : null;
+    fetch(`/api/admin/document/file?appId=${encodeURIComponent(appId)}&docType=${encodeURIComponent(doc.type)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.file?.dataUrl) {
+          setFetchedDataUrl(data.file.dataUrl);
+        }
+      })
+      .catch(() => {});
+  }, [isOpen, doc?.id, doc?.type, appId, isStaff]);
 
   // Trigger AI extraction automatically if not yet extracted when modal opens
   useEffect(() => {
@@ -53,13 +80,13 @@ export default function DocumentPreviewModal({
   // Convert PDF base64 / dataUrl to Blob URL for native object/iframe rendering
   useEffect(() => {
     let activeBlobUrl: string | null = null;
-    if (doc?.dataUrl) {
-      const isPdfDoc = doc.mimeType?.includes('pdf') || doc.filename?.toLowerCase().endsWith('.pdf');
+    if (effectiveDataUrl) {
+      const isPdfDoc = doc?.mimeType?.includes('pdf') || doc?.filename?.toLowerCase().endsWith('.pdf');
       if (isPdfDoc) {
-        if (doc.dataUrl.startsWith('data:')) {
+        if (effectiveDataUrl.startsWith('data:')) {
           try {
-            const commaIdx = doc.dataUrl.indexOf(',');
-            const base64Part = commaIdx !== -1 ? doc.dataUrl.substring(commaIdx + 1) : doc.dataUrl;
+            const commaIdx = effectiveDataUrl.indexOf(',');
+            const base64Part = commaIdx !== -1 ? effectiveDataUrl.substring(commaIdx + 1) : effectiveDataUrl;
             const binaryString = atob(base64Part);
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
@@ -73,8 +100,8 @@ export default function DocumentPreviewModal({
             console.warn('[PDF Preview] Failed to create Blob URL from dataUrl:', e);
             setPdfBlobUrl(null);
           }
-        } else if (doc.dataUrl.startsWith('http') || doc.dataUrl.startsWith('blob:')) {
-          setPdfBlobUrl(doc.dataUrl);
+        } else if (effectiveDataUrl.startsWith('http') || effectiveDataUrl.startsWith('blob:')) {
+          setPdfBlobUrl(effectiveDataUrl);
         }
       } else {
         setPdfBlobUrl(null);
@@ -88,7 +115,7 @@ export default function DocumentPreviewModal({
         URL.revokeObjectURL(activeBlobUrl);
       }
     };
-  }, [doc?.dataUrl, doc?.filename, doc?.mimeType]);
+  }, [effectiveDataUrl, doc?.filename, doc?.mimeType]);
 
   if (!isOpen || !doc) return null;
 
@@ -105,9 +132,9 @@ export default function DocumentPreviewModal({
 
   // Attempt to parse CSV rows if CSV
   let parsedCsvData: { headers: string[]; rows: string[][] } | null = null;
-  if (isCsv && doc.dataUrl && doc.dataUrl.includes('base64,')) {
+  if (isCsv && effectiveDataUrl && effectiveDataUrl.includes('base64,')) {
     try {
-      const base64 = doc.dataUrl.split('base64,')[1];
+      const base64 = effectiveDataUrl.split('base64,')[1];
       const decoded = atob(base64);
       const lines = decoded.split(/\r?\n/).filter((l) => l.trim().length > 0);
       if (lines.length > 0) {
@@ -269,9 +296,9 @@ export default function DocumentPreviewModal({
 
           {/* Action buttons on header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {doc.dataUrl && (
+            {effectiveDataUrl && (
               <a
-                href={doc.dataUrl}
+                href={effectiveDataUrl}
                 download={filename}
                 className="btn-secondary"
                 style={{ padding: '6px 12px', fontSize: '12px', textDecoration: 'none' }}
@@ -279,9 +306,9 @@ export default function DocumentPreviewModal({
                 ⤓ Download
               </a>
             )}
-            {doc.dataUrl && isPdf && (
+            {effectiveDataUrl && isPdf && (
               <a
-                href={doc.dataUrl}
+                href={pdfBlobUrl || effectiveDataUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="btn-secondary"
@@ -644,7 +671,7 @@ export default function DocumentPreviewModal({
               )}
 
               {/* Image Viewer */}
-              {isImage && doc.dataUrl && (
+              {isImage && effectiveDataUrl && (
                 <div
                   style={{
                     background: '#0f172a',
@@ -658,7 +685,7 @@ export default function DocumentPreviewModal({
                   }}
                 >
                   <img
-                    src={doc.dataUrl}
+                    src={effectiveDataUrl}
                     alt={filename}
                     style={{ maxWidth: '100%', maxHeight: '520px', objectFit: 'contain', borderRadius: '4px' }}
                   />
@@ -722,8 +749,8 @@ export default function DocumentPreviewModal({
                     >
                       ✨ View Extracted Sheet Cells
                     </button>
-                    {doc.dataUrl && (
-                      <a href={doc.dataUrl} download={filename} className="btn-secondary" style={{ fontSize: '13px', padding: '10px 18px', textDecoration: 'none' }}>
+                    {effectiveDataUrl && (
+                      <a href={effectiveDataUrl} download={filename} className="btn-secondary" style={{ fontSize: '13px', padding: '10px 18px', textDecoration: 'none' }}>
                         ⤓ Download Excel Workbook
                       </a>
                     )}
@@ -755,8 +782,8 @@ export default function DocumentPreviewModal({
                     >
                       ✨ View Extracted Text & Terms
                     </button>
-                    {doc.dataUrl && (
-                      <a href={doc.dataUrl} download={filename} className="btn-secondary" style={{ fontSize: '13px', padding: '10px 18px', textDecoration: 'none' }}>
+                    {effectiveDataUrl && (
+                      <a href={effectiveDataUrl} download={filename} className="btn-secondary" style={{ fontSize: '13px', padding: '10px 18px', textDecoration: 'none' }}>
                         ⤓ Download Word File
                       </a>
                     )}
@@ -780,8 +807,8 @@ export default function DocumentPreviewModal({
                   <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '18px' }}>
                     Document content has been indexed by the compliance verification engine.
                   </p>
-                  {doc.dataUrl && (
-                    <a href={doc.dataUrl} download={filename} className="btn-primary" style={{ fontSize: '13px', textDecoration: 'none' }}>
+                  {effectiveDataUrl && (
+                    <a href={effectiveDataUrl} download={filename} className="btn-primary" style={{ fontSize: '13px', textDecoration: 'none' }}>
                       ⤓ Download Document
                     </a>
                   )}
