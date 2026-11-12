@@ -15,6 +15,7 @@ const NON_SECRET_DEFAULTS: Record<string, string> = {
   OPENROUTER_MODEL: 'google/gemini-2.5-flash',
   TBMS_BASE_URL: 'https://tbmslive.org/api',
   STAFF_ADMIN_EMAIL: 'admin@flamecars.co.uk',
+  ADMIN_NOTIFICATION_EMAIL: 'hello@flamecars.co.uk',
   MAILGUN_DOMAIN: 'mail.uk-ilr.co.uk',
   MAILGUN_HOST: 'https://api.eu.mailgun.net',
   MAILGUN_FROM: 'Flame Cars Compliance <onboarding@mail.uk-ilr.co.uk>',

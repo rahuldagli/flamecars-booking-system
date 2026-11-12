@@ -22,6 +22,7 @@
   "vars": {
     "OPENROUTER_MODEL": "google/gemini-2.5-flash",
     "TBMS_BASE_URL": "https://tbmslive.org/api",
+    "ADMIN_NOTIFICATION_EMAIL": "hello@flamecars.co.uk",
     "NEXT_PUBLIC_APP_URL": "https://flamecars-booking-system.rahuldagli.workers.dev",
     "MAILGUN_HOST": "https://api.eu.mailgun.net",
     "MAILGUN_DOMAIN": "mail.uk-ilr.co.uk",

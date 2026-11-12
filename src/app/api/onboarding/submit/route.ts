@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { applicationStore, stripOversizedData } from '@/lib/serverStore';
 import { DriverApplication } from '@/types/onboarding';
 import { detectNameDiscrepancies } from '@/lib/nameCheck';
-import { sendDriverRegistrationEmail, getAppBaseUrl, SendEmailResult } from '@/lib/mailgun';
+import {
+  sendDriverRegistrationEmail,
+  sendStaffNewDriverNotificationEmail,
+  getAppBaseUrl,
+  SendEmailResult,
+} from '@/lib/mailgun';
 
 export async function POST(req: Request) {
   try {
@@ -86,27 +91,39 @@ export async function POST(req: Request) {
     // Save lightweight application to server store immediately (stripping oversized raw base64 data)
     let saved = await applicationStore.saveAsync(stripOversizedData(application));
 
-    // Compute preview & modify URL for driver email
+    // Compute preview & modify URL for driver email and admin dashboard URL
     const baseUrl = getAppBaseUrl(req);
     const previewUrl = `${baseUrl}/?ref=${encodeURIComponent(saved.referenceNumber)}`;
+    const adminUrl = `${baseUrl}/admin`;
 
-    // Dispatch email notification to driver via Mailgun
+    // Dispatch email notifications via Mailgun
     let emailResult: SendEmailResult = { success: false, skipped: true, error: 'Not initiated' };
+    let adminEmailResult: SendEmailResult = { success: false, skipped: true, error: 'Not initiated' };
+
+    // 1. Dispatch driver receipt email
     try {
       emailResult = await sendDriverRegistrationEmail(saved, previewUrl);
       if (emailResult.success) {
         saved.emailNotificationSent = true;
         saved.emailNotificationAt = new Date().toISOString();
         saved.emailNotificationError = undefined;
-        saved = await applicationStore.saveAsync(saved);
       } else if (!emailResult.skipped) {
         saved.emailNotificationSent = false;
         saved.emailNotificationError = emailResult.error;
-        saved = await applicationStore.saveAsync(saved);
       }
     } catch (emailErr: any) {
-      console.error('[MAILGUN] Unexpected exception dispatching email:', emailErr);
+      console.error('[MAILGUN] Unexpected exception dispatching driver email:', emailErr);
     }
+
+    // 2. Dispatch staff alert email to hello@flamecars.co.uk
+    try {
+      adminEmailResult = await sendStaffNewDriverNotificationEmail(saved, previewUrl, adminUrl);
+      console.log('[MAILGUN] Staff alert email result for Ref:', saved.referenceNumber, adminEmailResult);
+    } catch (adminErr: any) {
+      console.error('[MAILGUN] Unexpected exception dispatching staff alert email:', adminErr);
+    }
+
+    saved = await applicationStore.saveAsync(saved);
 
     return NextResponse.json({
       success: true,
@@ -118,6 +135,7 @@ export async function POST(req: Request) {
       previewUrl,
       tbmsSyncStatus: 'NOT_SYNCED',
       emailNotification: emailResult,
+      adminNotification: adminEmailResult,
     });
   } catch (error) {
     console.error('Submission Error:', error);

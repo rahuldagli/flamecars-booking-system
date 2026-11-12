@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { applicationStore } from '@/lib/serverStore';
-import { sendDriverRegistrationEmail, getAppBaseUrl } from '@/lib/mailgun';
+import { sendDriverRegistrationEmail, sendStaffNewDriverNotificationEmail, getAppBaseUrl } from '@/lib/mailgun';
 import { requireAdminAuth } from '@/lib/auth';
 
 export async function POST(req: Request) {
@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   if (!auth.authenticated) return auth.response;
 
   try {
-    const { appId } = await req.json();
+    const { appId, target } = await req.json();
     if (!appId) {
       return NextResponse.json({ error: 'Applicant ID is required' }, { status: 400 });
     }
@@ -21,14 +21,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Application not found' }, { status: 404 });
     }
 
+    const baseUrl = getAppBaseUrl(req);
+    const previewUrl = `${baseUrl}/?ref=${encodeURIComponent(app.referenceNumber || app.id)}`;
+    const adminUrl = `${baseUrl}/admin`;
+
+    if (target === 'admin') {
+      const adminResult = await sendStaffNewDriverNotificationEmail(app, previewUrl, adminUrl);
+      if (adminResult.success) {
+        return NextResponse.json({
+          success: true,
+          message: 'Admin notification email dispatched to hello@flamecars.co.uk ✓',
+          messageId: adminResult.messageId,
+          application: app,
+        });
+      }
+      return NextResponse.json(
+        { success: false, error: adminResult.error || 'Failed to dispatch admin notification email' },
+        { status: 500 }
+      );
+    }
+
     if (!app.email) {
       return NextResponse.json({ error: 'Application does not have an email address' }, { status: 400 });
     }
 
-    const baseUrl = getAppBaseUrl(req);
-    const previewUrl = `${baseUrl}/?ref=${encodeURIComponent(app.referenceNumber || app.id)}`;
-
     const emailResult = await sendDriverRegistrationEmail(app, previewUrl);
+
+    if (target === 'both') {
+      await sendStaffNewDriverNotificationEmail(app, previewUrl, adminUrl);
+    }
 
     if (emailResult.success) {
       app.emailNotificationSent = true;
