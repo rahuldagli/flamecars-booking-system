@@ -14,6 +14,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const sessionSecret = await getAsyncEnv('STAFF_SESSION_SECRET');
+    if (!sessionSecret || sessionSecret.length < 16) {
+      return NextResponse.json(
+        { error: 'Staff authentication is not configured (missing or <16 char STAFF_SESSION_SECRET in Runtime secrets).' },
+        { status: 500 }
+      );
+    }
+
     const { email, password } = await req.json();
 
     if (!email || !password) {
@@ -54,8 +62,11 @@ export async function POST(req: Request) {
     });
 
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error('[STAFF AUTH] Login Error:', error);
-    return NextResponse.json({ error: 'Authentication service error' }, { status: 500 });
+    return NextResponse.json(
+      { error: error?.message ? `Authentication service error: ${error.message}` : 'Authentication service error' },
+      { status: 500 }
+    );
   }
 }
