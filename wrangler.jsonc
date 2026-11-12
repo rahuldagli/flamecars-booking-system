@@ -11,6 +11,13 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "d1_databases": [
+    {
+      "binding": "FLAMECARS_KV",
+      "database_name": "db",
+      "database_id": "dd8cc915-df49-4062-afc8-017ed43c1229"
+    }
+  ],
   "vars": {
     "OPENROUTER_MODEL": "google/gemini-2.5-flash",
     "TBMS_BASE_URL": "https://tbmslive.org/api",

@@ -81,17 +81,28 @@ function getCacheDomain(): string {
   return publicUrl.replace(/\/+$/, '');
 }
 
-// Detect optional Cloudflare D1 or KV bindings at runtime
+// Detect optional Cloudflare D1 or KV bindings at runtime by capability
 async function getCloudflareBindings(): Promise<{ db?: any; kv?: any }> {
   try {
     const { getCloudflareContext } = await import('@opennextjs/cloudflare');
     const cf = await getCloudflareContext({ async: true });
     const env = cf?.env as Record<string, any> | undefined;
     if (!env) return {};
-    return {
-      db: env.DB || env.FLAMECARS_DB,
-      kv: env.FLAMECARS_KV || env.KV,
-    };
+
+    const candidates = [env.DB, env.FLAMECARS_DB, env.FLAMECARS_KV, env.KV];
+    let db: any;
+    let kv: any;
+
+    for (const c of candidates) {
+      if (!c) continue;
+      if (!db && typeof c.prepare === 'function') {
+        db = c;
+      } else if (!kv && typeof c.get === 'function' && typeof c.put === 'function') {
+        kv = c;
+      }
+    }
+
+    return { db, kv };
   } catch {
     return {};
   }
