@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "flamecars-booking-system",
   "main": ".open-next/worker.js",
-  "compatibility_date": "2024-09-23",
+  "compatibility_date": "2024-11-01",
   "compatibility_flags": [
     "nodejs_compat",
     "nodejs_compat_populate_process_env"
@@ -14,9 +14,9 @@
   "vars": {
     "OPENROUTER_MODEL": "google/gemini-2.5-flash",
     "TBMS_BASE_URL": "https://tbmslive.org/api",
-    "NEXT_PUBLIC_APP_URL": "https://flamecars.co.uk",
-    "MAILGUN_HOST": "https://api.mailgun.net",
-    "MAILGUN_DOMAIN": "mg.flamecars.co.uk",
-    "MAILGUN_FROM": "Flame Cars Compliance <onboarding@mg.flamecars.co.uk>"
+    "NEXT_PUBLIC_APP_URL": "https://flamecars-booking-system.rahuldagli.workers.dev",
+    "MAILGUN_HOST": "https://api.eu.mailgun.net",
+    "MAILGUN_DOMAIN": "mail.uk-ilr.co.uk",
+    "MAILGUN_FROM": "Flame Cars Compliance <onboarding@mail.uk-ilr.co.uk>"
   }
 }

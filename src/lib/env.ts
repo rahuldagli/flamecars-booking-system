@@ -33,7 +33,7 @@ const DEFAULT_FALLBACKS: Record<string, () => string> = {
   MAILGUN_DOMAIN: () => 'mail.uk-ilr.co.uk',
   MAILGUN_HOST: () => 'https://api.eu.mailgun.net',
   MAILGUN_FROM: () => 'Flame Cars Compliance <onboarding@mail.uk-ilr.co.uk>',
-  NEXT_PUBLIC_APP_URL: () => 'https://flamecars.co.uk',
+  NEXT_PUBLIC_APP_URL: () => 'https://flamecars-booking-system.rahuldagli.workers.dev',
 };
 
 export function getEnv(key: string, defaultValue = ''): string {

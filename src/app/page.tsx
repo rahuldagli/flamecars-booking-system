@@ -157,17 +157,30 @@ export default function OnboardingPage() {
         } catch { }
       }
 
-      // Async background server sync (debounced 600ms) if mobile number or reference exists
+      // Async background server sync (debounced 1200ms) if mobile number or reference exists
       if (next.mobileNumber || next.referenceNumber) {
         setSaveStatus('Saving changes...');
         if (draftTimerRef.timer) {
           clearTimeout(draftTimerRef.timer);
         }
         draftTimerRef.timer = setTimeout(() => {
+          // Send lightweight payload without raw base64 strings to keep worker fast and avoid CPU limit (Error 1102)
+          const shallowDocs: Record<string, any> = {};
+          if (next.documents) {
+            for (const [key, doc] of Object.entries(next.documents)) {
+              if (doc) {
+                shallowDocs[key] = { ...doc, dataUrl: undefined };
+              } else {
+                shallowDocs[key] = null;
+              }
+            }
+          }
+          const lightweightDraft = { ...next, documents: shallowDocs };
+
           fetch('/api/onboarding/draft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(next),
+            body: JSON.stringify(lightweightDraft),
           })
             .then(async (res) => {
               if (res.ok) {
@@ -181,7 +194,7 @@ export default function OnboardingPage() {
               }
             })
             .catch(() => setSaveStatus(''));
-        }, 600);
+        }, 1200);
       }
       return next;
     });

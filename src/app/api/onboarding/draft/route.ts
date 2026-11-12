@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { applicationStore } from '@/lib/serverStore';
+import { applicationStore, stripOversizedData } from '@/lib/serverStore';
 import { DriverApplication } from '@/types/onboarding';
 
 export async function POST(req: Request) {
@@ -9,7 +9,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing application data' }, { status: 400 });
     }
 
-    const saved = await applicationStore.saveAsync(application);
+    const saved = await applicationStore.saveAsync(stripOversizedData(application));
     return NextResponse.json({ success: true, application: saved });
   } catch (error) {
     console.error('Draft Save Error:', error);

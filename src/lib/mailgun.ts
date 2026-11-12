@@ -12,28 +12,24 @@ export interface SendEmailResult {
  * Returns the base application URL for generating preview & modify links.
  */
 export function getAppBaseUrl(req?: Request): string {
-  const publicAppUrl = getEnv('NEXT_PUBLIC_APP_URL');
-  if (publicAppUrl) {
-    return publicAppUrl.replace(/\/+$/, '');
-  }
-  const appUrl = getEnv('APP_URL');
-  if (appUrl) {
-    return appUrl.replace(/\/+$/, '');
-  }
   if (req) {
-    const origin = req.headers.get('origin');
-    if (origin && !origin.includes('localhost:3000')) {
-      return origin.replace(/\/+$/, '');
-    }
     const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
-    const proto = req.headers.get('x-forwarded-proto') || 'https';
-    if (host && !host.includes('localhost:3000')) {
+    if (host && host.includes('workers.dev')) {
+      const proto = req.headers.get('x-forwarded-proto') || 'https';
       return `${proto}://${host}`.replace(/\/+$/, '');
     }
-    if (origin) return origin.replace(/\/+$/, '');
-    if (host) return `${proto}://${host}`.replace(/\/+$/, '');
+    const origin = req.headers.get('origin');
+    if (origin && origin.includes('workers.dev')) {
+      return origin.replace(/\/+$/, '');
+    }
   }
-  return 'https://flamecars.co.uk';
+
+  const publicAppUrl = getEnv('NEXT_PUBLIC_APP_URL');
+  if (publicAppUrl && publicAppUrl.includes('workers.dev')) {
+    return publicAppUrl.replace(/\/+$/, '');
+  }
+
+  return 'https://flamecars-booking-system.rahuldagli.workers.dev';
 }
 
 /**

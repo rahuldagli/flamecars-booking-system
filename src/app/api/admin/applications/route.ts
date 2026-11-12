@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { applicationStore } from '@/lib/serverStore';
+import { applicationStore, stripOversizedData } from '@/lib/serverStore';
 
 export async function GET() {
   try {
-    const applications = await applicationStore.getAllAsync();
+    const rawApps = await applicationStore.getAllAsync();
+    const applications = rawApps.map(stripOversizedData);
 
     const counts = {
       TOTAL: applications.length,
@@ -34,13 +35,13 @@ export async function POST(req: Request) {
     if (Array.isArray(body)) {
       for (const item of body) {
         if (item && (item.id || item.referenceNumber || item.mobileNumber)) {
-          await applicationStore.saveAsync(item);
+          await applicationStore.saveAsync(stripOversizedData(item));
         }
       }
     } else if (body && (body.id || body.referenceNumber || body.mobileNumber)) {
-      await applicationStore.saveAsync(body);
+      await applicationStore.saveAsync(stripOversizedData(body));
     }
-    const applications = await applicationStore.getAllAsync();
+    const applications = (await applicationStore.getAllAsync()).map(stripOversizedData);
     return NextResponse.json({ success: true, count: applications.length, applications });
   } catch (error) {
     console.error('Admin Applications Sync Error:', error);

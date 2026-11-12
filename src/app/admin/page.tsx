@@ -56,13 +56,27 @@ export default function AdminDashboardPage() {
     checkSession();
   }, []);
 
-  // Auto-refresh applications in background so driver updates reflect live without manual reload
+  // Auto-refresh applications gently in background without CPU exhaustion
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    // Refresh every 25 seconds only if the tab is currently visible
     const interval = setInterval(() => {
-      loadApplications();
-    }, 6000);
-    return () => clearInterval(interval);
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadApplications(false);
+      }
+    }, 25000);
+
+    const handleFocus = () => {
+      loadApplications(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [isAuthenticated]);
 
   // Handle Staff Login
@@ -138,9 +152,28 @@ export default function AdminDashboardPage() {
     } catch {}
   }
 
+  // Helper to strip heavy base64 strings before sending over wire
+  function sanitizeForSync(app: DriverApplication): DriverApplication {
+    const shallowDocs: Record<string, any> = {};
+    if (app.documents) {
+      for (const [key, doc] of Object.entries(app.documents)) {
+        if (doc) {
+          shallowDocs[key] = {
+            ...doc,
+            dataUrl: '[stored-in-client]',
+          };
+        } else {
+          shallowDocs[key] = null;
+        }
+      }
+    }
+    return { ...app, documents: shallowDocs as any };
+  }
+
   // Load applications
-  async function loadApplications() {
-    setLoading(true);
+  async function loadApplications(trigger?: boolean | React.MouseEvent) {
+    const showSpinner = typeof trigger === 'boolean' ? trigger : true;
+    if (showSpinner) setLoading(true);
     try {
       // 1. Fetch authoritative applications from server first
       const res = await fetch('/api/admin/applications');
@@ -198,20 +231,19 @@ export default function AdminDashboardPage() {
         (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
       );
 
-      // 4. Push newer or missing local apps to server
-      const needPushToServer = combined.filter((app) => {
-        const srv = serverApps.find(
-          (s) => (s.referenceNumber && s.referenceNumber === app.referenceNumber) || s.id === app.id
+      // 4. Only push local apps to server on initial page load if missing on server
+      if (showSpinner) {
+        const missingOnServer = localApps.filter(
+          (loc) => !serverApps.some((srv) => srv.id === loc.id || srv.referenceNumber === loc.referenceNumber)
         );
-        if (!srv) return true;
-        return new Date(app.updatedAt || 0).getTime() > new Date(srv.updatedAt || 0).getTime();
-      });
-      if (needPushToServer.length > 0) {
-        fetch('/api/admin/applications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(needPushToServer),
-        }).catch(() => {});
+        if (missingOnServer.length > 0) {
+          const sanitizedPayload = missingOnServer.map(sanitizeForSync);
+          fetch('/api/admin/applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sanitizedPayload),
+          }).catch(() => {});
+        }
       }
 
       // 5. Keep local storage refreshed with the latest unified records

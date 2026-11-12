@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { applicationStore } from '@/lib/serverStore';
+import { applicationStore, stripOversizedData } from '@/lib/serverStore';
 import { DriverApplication } from '@/types/onboarding';
 import { detectNameDiscrepancies } from '@/lib/nameCheck';
 import { sendDriverRegistrationEmail, getAppBaseUrl, SendEmailResult } from '@/lib/mailgun';
@@ -83,8 +83,8 @@ export async function POST(req: Request) {
     application.updatedAt = new Date().toISOString();
     application.currentStep = 6;
 
-    // Save application to server store immediately
-    let saved = await applicationStore.saveAsync(application);
+    // Save lightweight application to server store immediately (stripping oversized raw base64 data)
+    let saved = await applicationStore.saveAsync(stripOversizedData(application));
 
     // Compute preview & modify URL for driver email
     const baseUrl = getAppBaseUrl(req);
