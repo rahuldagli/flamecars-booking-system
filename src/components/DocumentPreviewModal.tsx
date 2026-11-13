@@ -194,7 +194,7 @@ export default function DocumentPreviewModal({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 120,
+        zIndex: 1200,
         backgroundColor: 'rgba(15, 23, 42, 0.65)',
         backdropFilter: 'blur(8px)',
         display: 'flex',
