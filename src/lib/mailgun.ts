@@ -1,4 +1,5 @@
 import { DriverApplication, DocumentType } from '@/types/onboarding';
+import { CustomerBooking } from '@/types/booking';
 import { getEnv } from '@/lib/env';
 
 export interface SendEmailResult {
@@ -635,6 +636,246 @@ DRIVER DIRECT PREVIEW LINK:
 ${previewUrl}
 
 Flame Cars London • Compliance Operations
+`.trim();
+
+  return await sendMailgunMessage({
+    to: adminEmail,
+    subject,
+    html: htmlBody,
+    text: textBody,
+  });
+}
+
+/**
+ * Dispatches an automated booking confirmation receipt to the customer via Mailgun.
+ */
+export async function sendCustomerBookingConfirmationEmail(booking: CustomerBooking): Promise<SendEmailResult> {
+  if (!booking.customerEmail) {
+    return { success: false, error: 'Customer booking does not contain an email address' };
+  }
+
+  const subject = `Booking Confirmed: Flame Cars Transfer [Ref: ${booking.referenceNumber}]`;
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+  <div style="max-width: 620px; margin: 30px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08); border: 1px solid #e2e8f0;">
+    
+    <!-- Header -->
+    <div style="background-color: #0f172a; padding: 28px 32px; text-align: center; border-bottom: 4px solid #ea580c;">
+      <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 0.5px;">
+        FLAME <span style="color: #ea580c;">CARS</span>
+      </h1>
+      <p style="color: #94a3b8; margin: 6px 0 0 0; font-size: 13px; letter-spacing: 0.5px;">
+        LONDON PRIVATE HIRE DISPATCH &bull; TRANSFER CONFIRMATION
+      </p>
+    </div>
+
+    <!-- Main Content -->
+    <div style="padding: 32px;">
+      <div style="display: inline-block; padding: 4px 12px; border-radius: 20px; background-color: #dcfce7; color: #166534; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 16px;">
+        ✓ Booking Confirmed &bull; Paid Online
+      </div>
+
+      <h2 style="color: #0f172a; font-size: 22px; margin: 0 0 10px 0;">
+        Thank you, ${escapeHtml(booking.customerName)}!
+      </h2>
+
+      <p style="color: #475569; font-size: 15px; margin: 0 0 20px 0;">
+        Your Flame Cars private transfer has been successfully booked and paid. A licensed TfL driver has been reserved for your journey.
+      </p>
+
+      <!-- Reference Code Card -->
+      <div style="background: #fff7ed; border: 2px dashed #ea580c; border-radius: 10px; padding: 20px; text-align: center; margin: 24px 0;">
+        <div style="font-size: 11px; text-transform: uppercase; color: #9a3412; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px;">
+          YOUR BOOKING REFERENCE
+        </div>
+        <div style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 26px; font-weight: 800; color: #ea580c; letter-spacing: 2px;">
+          ${escapeHtml(booking.referenceNumber)}
+        </div>
+        ${
+          booking.tbmsJobReference
+            ? `<div style="margin-top: 8px; font-size: 12px; color: #166534; font-weight: 600;">✓ TBMS Dispatch Job #${escapeHtml(booking.tbmsJobReference)}</div>`
+            : ''
+        }
+      </div>
+
+      <!-- Journey Summary Table -->
+      <h3 style="font-size: 16px; color: #0f172a; margin: 24px 0 12px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+        Journey Summary
+      </h3>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #334155;">
+        <tbody>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; width: 35%;">Pickup Date &amp; Time:</td>
+            <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${escapeHtml(booking.pickupDate)} at ${escapeHtml(booking.pickupTime)} (London Time)</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b;">Pickup Location:</td>
+            <td style="padding: 8px 0; font-weight: 600;">${escapeHtml(booking.pickupAddress)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b;">Destination:</td>
+            <td style="padding: 8px 0; font-weight: 600;">${escapeHtml(booking.destinationAddress)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b;">Vehicle Category:</td>
+            <td style="padding: 8px 0; font-weight: 600;">${escapeHtml(booking.vehicleName)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b;">Passengers / Luggage:</td>
+            <td style="padding: 8px 0; font-weight: 600;">${booking.passengers} Passenger${booking.passengers > 1 ? 's' : ''} &bull; ${booking.luggage} Large Bag${booking.luggage !== 1 ? 's' : ''}</td>
+          </tr>
+          ${
+            booking.flightNumber
+              ? `<tr>
+                  <td style="padding: 8px 0; color: #64748b;">Flight Number:</td>
+                  <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${escapeHtml(booking.flightNumber)}</td>
+                </tr>`
+              : ''
+          }
+          <tr>
+            <td style="padding: 8px 0; color: #64748b;">Total Fare Paid:</td>
+            <td style="padding: 8px 0; font-weight: 800; font-size: 16px; color: #166534;">&pound;${booking.fare.toFixed(2)} GBP</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Arrival Instructions Box -->
+      <div style="background-color: #f8fafc; border-left: 4px solid #ea580c; padding: 14px 18px; border-radius: 4px; margin: 24px 0;">
+        <h4 style="margin: 0 0 6px 0; font-size: 14px; color: #0f172a;">Important Arrival Information</h4>
+        <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #475569;">
+          <li style="margin-bottom: 4px;"><strong>Airport Pickups:</strong> 60 minutes complimentary waiting time included from flight touchdown. Our dispatch monitors your flight automatically.</li>
+          <li style="margin-bottom: 4px;"><strong>Residential &amp; Hotel Pickups:</strong> 15 minutes complimentary waiting time included.</li>
+          <li>Your driver will send an SMS alert upon arrival with their vehicle registration and location.</li>
+        </ul>
+      </div>
+
+      <!-- Support / Contact -->
+      <p style="font-size: 13px; color: #64748b; margin: 20px 0 0 0;">
+        Need to amend your booking or speak with dispatch? Call us 24/7 on <strong style="color: #0f172a;">020 3400 8257</strong> or email <strong style="color: #0f172a;">hello@flamecars.co.uk</strong> quoting your reference <strong>${escapeHtml(booking.referenceNumber)}</strong>.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background-color: #0f172a; padding: 24px 32px; text-align: center; font-size: 12px; color: #94a3b8;">
+      <p style="margin: 0 0 6px 0;">
+        Flame Cars London &bull; Licensed Private Hire Operator
+      </p>
+      <p style="margin: 0; font-size: 11px; color: #64748b;">
+        This confirmation was sent to ${escapeHtml(booking.customerEmail)} regarding your transfer reservation.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+`.trim();
+
+  const textBody = `
+FLAME CARS - TRANSFER BOOKING CONFIRMATION
+==========================================
+
+Hello ${booking.customerName},
+
+Thank you for choosing Flame Cars! Your private transfer is confirmed and paid.
+
+BOOKING REFERENCE: ${booking.referenceNumber}
+${booking.tbmsJobReference ? `TBMS Dispatch Reference: #${booking.tbmsJobReference}` : ''}
+
+JOURNEY DETAILS:
+- Pickup Date & Time: ${booking.pickupDate} at ${booking.pickupTime} (London Time)
+- Pickup Location: ${booking.pickupAddress}
+- Destination: ${booking.destinationAddress}
+- Vehicle: ${booking.vehicleName}
+- Passengers: ${booking.passengers} | Luggage: ${booking.luggage} bags
+${booking.flightNumber ? `- Flight Number: ${booking.flightNumber}` : ''}
+- Total Fare Paid: £${booking.fare.toFixed(2)} GBP (Prepaid via Stripe)
+
+DISPATCH & WAITING TIME:
+- Airport Pickups: 60 minutes free waiting time included from flight landing.
+- Other Pickups: 15 minutes free waiting time included.
+- Your driver will text you upon arrival.
+
+Questions? Call our 24/7 dispatch desk on 020 3400 8257 or email hello@flamecars.co.uk.
+
+Flame Cars London • Customer Dispatch Team
+`.trim();
+
+  return await sendMailgunMessage({
+    to: booking.customerEmail,
+    subject,
+    html: htmlBody,
+    text: textBody,
+  });
+}
+
+/**
+ * Dispatches an automated booking alert email to staff (hello@flamecars.co.uk).
+ */
+export async function sendStaffBookingAlertEmail(booking: CustomerBooking): Promise<SendEmailResult> {
+  const adminEmail = getEnv('ADMIN_NOTIFICATION_EMAIL', 'hello@flamecars.co.uk');
+  const subject = `🚗 New Customer Booking: ${booking.customerName} (£${booking.fare.toFixed(2)}) [Ref: ${booking.referenceNumber}]`;
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #0f172a; padding: 24px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden;">
+    <div style="background: #0f172a; padding: 20px 24px; border-bottom: 4px solid #ea580c;">
+      <h2 style="color: #ffffff; margin: 0; font-size: 18px;">Flame Cars Operations &bull; New Booking Alert</h2>
+    </div>
+    <div style="padding: 24px;">
+      <div style="background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 13px; display: inline-block; margin-bottom: 16px;">
+        ✓ PAID ONLINE (&pound;${booking.fare.toFixed(2)})
+      </div>
+      <h3 style="margin: 0 0 16px 0;">Reference: <span style="color: #ea580c; font-family: monospace;">${escapeHtml(booking.referenceNumber)}</span></h3>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <tr><td style="color: #64748b; padding: 6px 0;">Passenger:</td><td style="font-weight: 700;">${escapeHtml(booking.customerName)}</td></tr>
+        <tr><td style="color: #64748b; padding: 6px 0;">Phone:</td><td style="font-weight: 700;"><a href="tel:${escapeHtml(booking.customerPhone)}" style="color: #ea580c;">${escapeHtml(booking.customerPhone)}</a></td></tr>
+        <tr><td style="color: #64748b; padding: 6px 0;">Email:</td><td><a href="mailto:${escapeHtml(booking.customerEmail)}" style="color: #ea580c;">${escapeHtml(booking.customerEmail)}</a></td></tr>
+        <tr><td style="color: #64748b; padding: 6px 0;">Date / Time:</td><td style="font-weight: 700;">${escapeHtml(booking.pickupDate)} at ${escapeHtml(booking.pickupTime)}</td></tr>
+        <tr><td style="color: #64748b; padding: 6px 0;">Pickup:</td><td style="font-weight: 600;">${escapeHtml(booking.pickupAddress)}</td></tr>
+        <tr><td style="color: #64748b; padding: 6px 0;">Destination:</td><td style="font-weight: 600;">${escapeHtml(booking.destinationAddress)}</td></tr>
+        <tr><td style="color: #64748b; padding: 6px 0;">Vehicle:</td><td style="font-weight: 700;">${escapeHtml(booking.vehicleName)}</td></tr>
+        <tr><td style="color: #64748b; padding: 6px 0;">Pax / Bags:</td><td>${booking.passengers} Pax &bull; ${booking.luggage} Bags</td></tr>
+        ${booking.flightNumber ? `<tr><td style="color: #64748b; padding: 6px 0;">Flight #:</td><td style="font-weight: 700;">${escapeHtml(booking.flightNumber)}</td></tr>` : ''}
+        ${booking.notes ? `<tr><td style="color: #64748b; padding: 6px 0;">Notes:</td><td>${escapeHtml(booking.notes)}</td></tr>` : ''}
+        <tr><td style="color: #64748b; padding: 6px 0;">TBMS Status:</td><td style="font-weight: 700; color: ${booking.tbmsStatus === 'SYNCED' ? '#166534' : '#b45309'};">${booking.tbmsStatus}${booking.tbmsJobReference ? ` (#${booking.tbmsJobReference})` : ''}</td></tr>
+      </table>
+
+      <div style="margin-top: 24px; text-align: center;">
+        <a href="${getAppBaseUrl()}/admin" style="background: #ea580c; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block;">
+          View in Staff Operations Dashboard &rarr;
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+`.trim();
+
+  const textBody = `
+NEW BOOKING ALERT: ${booking.referenceNumber}
+Passenger: ${booking.customerName} (${booking.customerPhone})
+Pickup: ${booking.pickupDate} at ${booking.pickupTime}
+From: ${booking.pickupAddress}
+To: ${booking.destinationAddress}
+Vehicle: ${booking.vehicleName} (£${booking.fare.toFixed(2)})
+TBMS: ${booking.tbmsStatus} ${booking.tbmsJobReference || ''}
+
+Staff Dashboard: ${getAppBaseUrl()}/admin
 `.trim();
 
   return await sendMailgunMessage({

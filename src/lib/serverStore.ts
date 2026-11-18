@@ -358,11 +358,14 @@ export const applicationStore = {
         }
       }
 
-      // Preserve ACTIVE status & TBMS sync status if already approved and activated
-      if (existing.status === 'ACTIVE') {
+      // Preserve ACTIVE status & TBMS sync status if already approved and activated (unless explicitly trashed)
+      if (existing.status === 'ACTIVE' && app.status !== 'TRASH' && !app.isDeleted) {
         app.status = 'ACTIVE';
         app.tbmsDriverId = app.tbmsDriverId || existing.tbmsDriverId;
         app.tbmsSyncStatus = existing.tbmsSyncStatus || 'SYNCED';
+      } else if (existing.tbmsDriverId) {
+        app.tbmsDriverId = app.tbmsDriverId || existing.tbmsDriverId;
+        app.tbmsSyncStatus = app.tbmsSyncStatus || existing.tbmsSyncStatus;
       }
 
       // Preserve approved/rejected document reviews from staff

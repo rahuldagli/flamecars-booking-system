@@ -6,7 +6,8 @@ export type ApplicationStatus =
   | 'APPROVED_PENDING_TBMS'
   | 'ACTIVE'
   | 'SUSPENDED'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'TRASH';
 
 export type DocumentType =
   | 'TFL_PHV_DRIVER_BADGE_FRONT'
@@ -120,6 +121,11 @@ export interface DriverApplication {
   emailNotificationSent?: boolean;
   emailNotificationAt?: string;
   emailNotificationError?: string;
+
+  // Trash & Soft Delete
+  isDeleted?: boolean;
+  deletedAt?: string;
+  previousStatus?: ApplicationStatus;
 }
 
 export const INITIAL_APPLICATION: DriverApplication = {

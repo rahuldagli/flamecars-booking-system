@@ -52,10 +52,12 @@ export async function POST(req: Request) {
       app.lastModifiedFields = [];
       app.tbmsSyncError = undefined;
     } else if (tbmsResult.alreadyExists) {
-      // Fix H5: Resolve PENDING status rather than leaving it stuck
+      if (tbmsResult.driverId) {
+        app.tbmsDriverId = tbmsResult.driverId;
+      }
       app.tbmsSyncStatus = app.tbmsDriverId ? 'SYNCED' : (prevSyncStatus === 'SYNCED' ? 'SYNCED' : 'FAILED');
       app.tbmsSyncError =
-        'Mobile number is already registered in TBMS dispatch. CreateDriver.php cannot update existing drivers.';
+        tbmsResult.error || 'Mobile number is already registered in TBMS dispatch system.';
     } else {
       app.tbmsSyncStatus = 'FAILED';
       app.tbmsSyncError = tbmsResult.error || 'Failed to sync with TBMS';
@@ -78,7 +80,7 @@ export async function POST(req: Request) {
           success: false,
           alreadyExists: true,
           error:
-            "TBMS dispatch rejected update: 'Mobile number is already in use.' TBMS CreateDriver.php is insert-only and cannot overwrite existing drivers automatically. Please update the driver name directly in the TBMS Admin Console.",
+            tbmsResult.error || "TBMS dispatch rejected registration: 'Mobile number is already in use.'",
           application: saved,
         },
         { status: 400 }

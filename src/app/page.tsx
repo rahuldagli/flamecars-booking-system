@@ -1,382 +1,285 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { DriverApplication, INITIAL_APPLICATION } from '@/types/onboarding';
-import { loadLocalDraft, saveLocalDraft, clearLocalDraft } from '@/lib/storage';
-import StepProgressBar from '@/components/StepProgressBar';
-import ResumeModal from '@/components/ResumeModal';
-import Step0Landing from '@/components/steps/Step0Landing';
-import Step1Identity from '@/components/steps/Step1Identity';
-import Step2Vehicle from '@/components/steps/Step2Vehicle';
-import Step3Documents from '@/components/steps/Step3Documents';
-import Step4BankDetails from '@/components/steps/Step4BankDetails';
-import Step4Agreement from '@/components/steps/Step4Agreement';
-import Step5Review from '@/components/steps/Step5Review';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-export default function OnboardingPage() {
-  const [app, setApp] = useState<DriverApplication>(INITIAL_APPLICATION);
-  const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<string>('');
-  const [loadError, setLoadError] = useState<string>('');
-  const [isLoadingRef, setIsLoadingRef] = useState(false);
+export default function HomePage() {
+  const router = useRouter();
+  const [checkingRef, setCheckingRef] = useState(true);
 
-  // Hydrate from URL query or localStorage on client mount
+  // Preserve backwards compatibility for driver links: ?ref=FLM-DRV-...
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const isHome = params.get('home') === '1';
-    const refParam = params.get('ref') || params.get('reference') || params.get('id');
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get('ref') || params.get('reference') || params.get('id');
+      const isHome = params.get('home') === '1';
 
-    // If driver clicked a preview/modify link from email: ?ref=FLM-DRV-...
-    if (refParam) {
-      setIsLoadingRef(true);
-
-      const tryFallback = () => {
-        const cleanRef = refParam.trim().toLowerCase();
-        try {
-          const submittedRaw = localStorage.getItem('flamecars_submitted_applications');
-          if (submittedRaw) {
-            const list = JSON.parse(submittedRaw);
-            const found = list.find((a: any) =>
-              (a.referenceNumber || '').toLowerCase() === cleanRef ||
-              (a.mobileNumber || '').replace(/\s+/g, '') === cleanRef
-            );
-            if (found) {
-              setApp({ ...found, currentStep: 6 });
-              saveLocalDraft(found);
-              setSaveStatus('Application loaded from local cache');
-              fetch('/api/onboarding/draft', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(found),
-              }).catch(() => { });
-              return true;
-            }
-          }
-        } catch { }
-
-        const draft = loadLocalDraft();
-        if (
-          draft &&
-          ((draft.referenceNumber || '').toLowerCase() === cleanRef ||
-            (draft.mobileNumber || '').replace(/\s+/g, '') === cleanRef)
-        ) {
-          setApp({ ...draft, currentStep: 6 });
-          setSaveStatus('Application loaded from local draft');
-          fetch('/api/onboarding/draft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(draft),
-          }).catch(() => { });
-          return true;
-        }
-        return false;
-      };
-
-      fetch(`/api/onboarding/draft?identifier=${encodeURIComponent(refParam.trim())}`)
-        .then(async (res) => {
-          if (!res.ok) {
-            throw new Error('Application not found');
-          }
-          return res.json();
-        })
-        .then((data) => {
-          if (data && data.application) {
-            setApp({ ...data.application, currentStep: 6 });
-            saveLocalDraft(data.application);
-            try {
-              const raw = localStorage.getItem('flamecars_submitted_applications');
-              const list = raw ? JSON.parse(raw) : [];
-              const updated = [
-                data.application,
-                ...list.filter(
-                  (a: any) =>
-                    a.referenceNumber !== data.application.referenceNumber && a.id !== data.application.id
-                ),
-              ];
-              localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
-            } catch { }
-            setSaveStatus('Application loaded from link');
-          } else {
-            const recovered = tryFallback();
-            if (!recovered) {
-              setLoadError(`Application "${refParam}" not found. You can resume with your mobile number.`);
-            }
-          }
-        })
-        .catch((err) => {
-          console.warn('Server lookup failed, checking local cache:', err);
-          const recovered = tryFallback();
-          if (!recovered) {
-            setLoadError(`Could not find application "${refParam}". Please check your link or resume with your mobile number.`);
-          }
-        })
-        .finally(() => {
-          setIsLoadingRef(false);
-          setIsHydrated(true);
-        });
-      return;
+      if (ref && !isHome) {
+        // Driver email review/modify link -> route to dedicated driver onboarding page
+        router.replace(`/driver${window.location.search}`);
+        return;
+      }
+      setCheckingRef(false);
     }
+  }, [router]);
 
-    const saved = loadLocalDraft();
-
-    if (isHome) {
-      if (saved) {
-        setApp({ ...saved, currentStep: 0 });
-      } else {
-        setApp({ ...INITIAL_APPLICATION, currentStep: 0 });
-      }
-      window.history.replaceState({}, '', '/');
-    } else if (saved && saved.legalName) {
-      setApp(saved);
-    }
-    setIsHydrated(true);
-  }, []);
-
-  const draftTimerRef = useState<{ timer: NodeJS.Timeout | null }>({ timer: null })[0];
-
-  // Autosave draft on change with debounced server sync
-  function updateApp(updates: Partial<DriverApplication>) {
-    setApp((prev) => {
-      const next = { ...prev, ...updates, updatedAt: new Date().toISOString() };
-      saveLocalDraft(next);
-
-      // Keep submitted applications in sync if this application already has a reference number
-      if (next.referenceNumber) {
-        try {
-          const raw = localStorage.getItem('flamecars_submitted_applications');
-          const list = raw ? JSON.parse(raw) : [];
-          const updated = [
-            next,
-            ...list.filter(
-              (a: any) =>
-                a.referenceNumber !== next.referenceNumber && a.id !== next.id
-            ),
-          ];
-          localStorage.setItem('flamecars_submitted_applications', JSON.stringify(updated));
-        } catch { }
-      }
-
-      // Async background server sync (debounced 1200ms) if mobile number or reference exists
-      if (next.mobileNumber || next.referenceNumber) {
-        setSaveStatus('Saving changes...');
-        if (draftTimerRef.timer) {
-          clearTimeout(draftTimerRef.timer);
-        }
-        draftTimerRef.timer = setTimeout(() => {
-          // Send lightweight payload without raw base64 strings to keep worker fast and avoid CPU limit (Error 1102)
-          const shallowDocs: Record<string, any> = {};
-          if (next.documents) {
-            for (const [key, doc] of Object.entries(next.documents)) {
-              if (doc) {
-                shallowDocs[key] = { ...doc, dataUrl: undefined };
-              } else {
-                shallowDocs[key] = null;
-              }
-            }
-          }
-          const lightweightDraft = { ...next, documents: shallowDocs };
-
-          fetch('/api/onboarding/draft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(lightweightDraft),
-          })
-            .then(async (res) => {
-              if (res.ok) {
-                const data = await res.json();
-                if (data.application?.referenceNumber && !next.referenceNumber) {
-                  setApp((curr) => ({ ...curr, referenceNumber: data.application.referenceNumber }));
-                }
-                setSaveStatus('Draft saved ✓');
-              } else {
-                setSaveStatus('');
-              }
-            })
-            .catch(() => setSaveStatus(''));
-        }, 1200);
-      }
-      return next;
-    });
-  }
-
-  // Discard saved draft and start completely fresh application
-  function handleStartNew() {
-    clearLocalDraft();
-    const freshApp: DriverApplication = {
-      ...INITIAL_APPLICATION,
-      id: 'app_' + Math.random().toString(36).substring(2, 11),
-      currentStep: 1,
-      updatedAt: new Date().toISOString(),
-    };
-    setApp(freshApp);
-    saveLocalDraft(freshApp);
-  }
-
-  function handleResume(resumedApp: DriverApplication) {
-    setApp(resumedApp);
-    saveLocalDraft(resumedApp);
-  }
-
-  if (isLoadingRef || !isHydrated) {
+  if (checkingRef) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '60vh', gap: '14px' }}>
-        <div style={{ width: '40px', height: '40px', border: '3px solid #fed7aa', borderTopColor: '#ea580c', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-        <div style={{ color: 'var(--flame-600)', fontSize: '15px', fontWeight: 600 }}>Loading Flame Cars Application...</div>
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: '#64748b' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔥</div>
+          <div>Loading Flame Cars...</div>
+        </div>
       </div>
     );
   }
 
-  const hasDraft = !!(app.legalName || app.mobileNumber);
-
   return (
-    <div className="container" style={{ paddingTop: '24px', maxWidth: '820px' }}>
-      {/* Alert if link could not be loaded */}
-      {loadError && (
+    <div style={{ maxWidth: '1040px', margin: '0 auto', padding: '36px 16px 60px' }}>
+      {/* Hero Headline */}
+      <div style={{ textAlign: 'center', marginBottom: '40px' }}>
         <div
           style={{
-            padding: '12px 16px',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--danger-bg)',
-            color: 'var(--danger)',
-            fontSize: '13px',
-            marginBottom: '16px',
-            display: 'flex',
-            justifyContent: 'space-between',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: '8px',
+            background: '#ffedd5',
+            color: '#c2410c',
+            padding: '6px 14px',
+            borderRadius: '20px',
+            fontSize: '13px',
+            fontWeight: 700,
+            marginBottom: '16px',
           }}
         >
-          <span>{loadError}</span>
-          <button
-            onClick={() => setIsResumeModalOpen(true)}
-            className="btn-secondary"
-            style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
-          >
-            Resume Manually
-          </button>
+          <span>🔥</span> Licensed London Private Hire Operator
         </div>
-      )}
 
-      {/* Top Status Bar (Step > 0) */}
-      {app.currentStep > 0 && (
+        <h1
+          style={{
+            fontSize: 'clamp(28px, 5vw, 44px)',
+            fontWeight: 900,
+            color: '#0f172a',
+            lineHeight: 1.15,
+            margin: '0 0 16px',
+            letterSpacing: '-0.03em',
+          }}
+        >
+          Premium Transfers &amp; Chauffeur Services <br />
+          <span style={{ color: '#ed6b24' }}>Across London &amp; the UK</span>
+        </h1>
+
+        <p
+          style={{
+            fontSize: '17px',
+            color: '#64748b',
+            maxWidth: '680px',
+            margin: '0 auto',
+            lineHeight: 1.5,
+          }}
+        >
+          Fixed-rate airport transfers, executive city travel, and reliable private hire.
+          Book your vehicle online with instant confirmation or apply to join our fleet.
+        </p>
+      </div>
+
+      {/* Main Dual Cards Grid */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: '24px',
+          marginBottom: '48px',
+        }}
+      >
+        {/* Customer Booking Card */}
         <div
           style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            border: '2px solid #ed6b24',
+            boxShadow: '0 12px 30px rgba(237, 107, 36, 0.08)',
+            padding: '32px',
             display: 'flex',
+            flexDirection: 'column',
             justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px',
-            fontSize: '12px',
-            color: 'var(--text-muted)',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              background: '#ffedd5',
+              color: '#c2410c',
+              fontSize: '11px',
+              fontWeight: 700,
+              padding: '3px 10px',
+              borderRadius: '12px',
+            }}
+          >
+            Instant Online Quote
+          </div>
+
+          <div>
+            <div style={{ fontSize: '38px', marginBottom: '14px' }}>🚗</div>
+            <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '0 0 10px' }}>
+              Book a Transfer
+            </h2>
+            <p style={{ color: '#475569', fontSize: '14px', lineHeight: 1.6, margin: '0 0 20px' }}>
+              Pickups from Greater London and all 5 major London airports (Heathrow, Gatwick, Stansted, Luton, London City) to anywhere in the UK.
+            </p>
+
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: '0 0 24px',
+                fontSize: '14px',
+                color: '#334155',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <li>✓ Guaranteed fixed fare calculated by road miles</li>
+              <li>✓ 45 mins complimentary airport wait + flight tracking</li>
+              <li>✓ Saloon, 6-Seater MPV &amp; Executive Mercedes classes</li>
+              <li>✓ Secure Stripe credit/debit card checkout</li>
+            </ul>
+          </div>
+
+          <Link
+            href="/book"
+            style={{
+              background: '#ed6b24',
+              color: '#ffffff',
+              textAlign: 'center',
+              padding: '14px 20px',
+              borderRadius: '8px',
+              fontWeight: 700,
+              fontSize: '16px',
+              textDecoration: 'none',
+              boxShadow: '0 4px 14px rgba(237, 107, 36, 0.3)',
+              display: 'block',
+            }}
+          >
+            Calculate Fare &amp; Book Transfer →
+          </Link>
+        </div>
+
+        {/* Driver Onboarding Card */}
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            border: '1px solid #cbd5e1',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.04)',
+            padding: '32px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
           }}
         >
           <div>
-            Application Reference:{' '}
-            <strong style={{ color: 'var(--flame-600)' }}>
-              {app.referenceNumber || 'DRAFT (Auto-assigned on submit)'}
-            </strong>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>{saveStatus || 'Draft saved'}</span>
-            <button
-              onClick={() => setIsResumeModalOpen(true)}
+            <div style={{ fontSize: '38px', marginBottom: '14px' }}>📋</div>
+            <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '0 0 10px' }}>
+              Drive with Flame Cars
+            </h2>
+            <p style={{ color: '#475569', fontSize: '14px', lineHeight: 1.6, margin: '0 0 20px' }}>
+              Join our network of elite TfL-licensed private hire drivers. Fast 5-minute digital registration, instant AI document verification, and prompt TBMS approval.
+            </p>
+
+            <ul
               style={{
-                background: 'transparent',
-                color: 'var(--text-secondary)',
-                textDecoration: 'underline',
-                fontSize: '12px',
+                listStyle: 'none',
+                padding: 0,
+                margin: '0 0 24px',
+                fontSize: '14px',
+                color: '#334155',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
               }}
             >
-              Resume Another Draft
-            </button>
+              <li>✓ AI document scanning with auto-fill</li>
+              <li>✓ High-value London &amp; airport transfer jobs</li>
+              <li>✓ Flexible schedule &amp; dedicated compliance team</li>
+              <li>✓ Direct weekly bank payouts</li>
+            </ul>
+          </div>
+
+          <Link
+            href="/driver"
+            style={{
+              background: '#0f172a',
+              color: '#ffffff',
+              textAlign: 'center',
+              padding: '14px 20px',
+              borderRadius: '8px',
+              fontWeight: 700,
+              fontSize: '16px',
+              textDecoration: 'none',
+              display: 'block',
+            }}
+          >
+            Driver Onboarding Registration →
+          </Link>
+        </div>
+      </div>
+
+      {/* Trust & Coverage Bar */}
+      <div
+        style={{
+          background: '#f8fafc',
+          borderRadius: '16px',
+          border: '1px solid #e2e8f0',
+          padding: '28px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '20px',
+          textAlign: 'center',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
+            5 Airports
+          </div>
+          <div style={{ fontSize: '13px', color: '#64748b' }}>
+            Heathrow, Gatwick, Stansted, Luton &amp; London City
           </div>
         </div>
-      )}
 
-      {/* Progress Bar */}
-      <StepProgressBar
-        currentStep={app.currentStep}
-        onStepClick={(step) => updateApp({ currentStep: step })}
-      />
+        <div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
+            Fixed Pricing
+          </div>
+          <div style={{ fontSize: '13px', color: '#64748b' }}>
+            Road distance calculation with no surge pricing
+          </div>
+        </div>
 
-      {/* Step Router */}
-      {app.currentStep === 0 && (
-        <Step0Landing
-          onStart={hasDraft ? handleStartNew : () => updateApp({ currentStep: 1 })}
-          onStartFresh={handleStartNew}
-          onResumeClick={() => setIsResumeModalOpen(true)}
-          hasDraft={hasDraft}
-          draftName={app.legalName}
-          onResumeDraft={() => updateApp({ currentStep: 1 })}
-        />
-      )}
+        <div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
+            TfL Licensed
+          </div>
+          <div style={{ fontSize: '13px', color: '#64748b' }}>
+            London Private Hire Operator compliant
+          </div>
+        </div>
 
-      {app.currentStep === 1 && (
-        <Step1Identity
-          data={app}
-          onChange={updateApp}
-          onNext={() => updateApp({ currentStep: 2 })}
-          onBack={() => updateApp({ currentStep: 0 })}
-        />
-      )}
-
-      {app.currentStep === 2 && (
-        <Step2Vehicle
-          data={app}
-          onChange={updateApp}
-          onNext={() => updateApp({ currentStep: 3 })}
-          onBack={() => updateApp({ currentStep: 1 })}
-        />
-      )}
-
-      {app.currentStep === 3 && (
-        <Step3Documents
-          data={app}
-          onChange={updateApp}
-          onNext={() => updateApp({ currentStep: 4 })}
-          onBack={() => updateApp({ currentStep: 2 })}
-        />
-      )}
-
-      {app.currentStep === 4 && (
-        <Step4BankDetails
-          data={app}
-          onChange={updateApp}
-          onNext={() => updateApp({ currentStep: 5 })}
-          onBack={() => updateApp({ currentStep: 3 })}
-        />
-      )}
-
-      {app.currentStep === 5 && (
-        <Step4Agreement
-          data={app}
-          onChange={updateApp}
-          onNext={() => updateApp({ currentStep: 6 })}
-          onBack={() => updateApp({ currentStep: 4 })}
-        />
-      )}
-
-      {app.currentStep === 6 && (
-        <Step5Review
-          data={app}
-          onChange={updateApp}
-          onEditStep={(step) => updateApp({ currentStep: step })}
-          onSubmitSuccess={(ref) =>
-            updateApp({
-              referenceNumber: ref,
-              status: app.status === 'ACTIVE' ? 'ACTIVE' : 'UNDER_REVIEW',
-            })
-          }
-          onBack={() => updateApp({ currentStep: 5 })}
-        />
-      )}
-
-      {/* Resume Application Modal */}
-      <ResumeModal
-        isOpen={isResumeModalOpen}
-        onClose={() => setIsResumeModalOpen(false)}
-        onResume={handleResume}
-      />
+        <div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
+            24/7 Operations
+          </div>
+          <div style={{ fontSize: '13px', color: '#64748b' }}>
+            Live dispatch center &amp; telephone support
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
