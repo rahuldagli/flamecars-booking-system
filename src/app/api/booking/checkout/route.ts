@@ -3,6 +3,7 @@ import { bookingStore, generateSecureBookingId, generateSecureBookingRef } from 
 import { createStripeCheckoutSession } from '@/lib/stripe';
 import { CustomerBooking, VehicleCategory } from '@/types/booking';
 import { getEnv } from '@/lib/env';
+import { validateAndCalculateDiscount, recordDiscountUsage } from '@/lib/fareConfig';
 
 function resolveBaseUrl(req: NextRequest): string {
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
       customerPhone,
       flightNumber,
       notes,
+      discountCode,
     } = body || {};
 
     if (!quoteId || typeof quoteId !== 'string') {
@@ -113,6 +115,45 @@ export async function POST(req: NextRequest) {
     const referenceNumber = generateSecureBookingRef();
     const nowIso = new Date().toISOString();
 
+    // Calculate pricing and check for optional discount code
+    let finalFare = vehicle.totalFare;
+    let appliedDiscountCode: string | undefined = undefined;
+    let appliedDiscountAmount: number | undefined = undefined;
+    let appliedMarginPercent: number | undefined = undefined;
+    let netProfitAmount: number | undefined = undefined;
+
+    if (discountCode && typeof discountCode === 'string' && discountCode.trim()) {
+      const discResult = validateAndCalculateDiscount({
+        code: discountCode.trim(),
+        fare: vehicle.totalFare,
+        driverPayout: vehicle.driverPayout,
+        airportCharges: quote.airportCharges,
+        airportCode: quote.airportCode,
+        vehicleCategory: vehicle.id,
+      });
+
+      if (!discResult.valid) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: discResult.error || 'The applied discount code is not valid for this booking.',
+          },
+          { status: 400 }
+        );
+      }
+
+      finalFare = discResult.discountedFare;
+      appliedDiscountCode = discResult.discountCode?.code;
+      appliedDiscountAmount = discResult.discountAmount;
+      appliedMarginPercent = discResult.marginPercent;
+      netProfitAmount = discResult.netProfit;
+
+      // Increment discount code usage
+      if (appliedDiscountCode) {
+        recordDiscountUsage(appliedDiscountCode);
+      }
+    }
+
     const booking: CustomerBooking = {
       id: bookingId,
       referenceNumber,
@@ -130,7 +171,11 @@ export async function POST(req: NextRequest) {
       vehicleCategory: vehicle.id,
       vehicleName: vehicle.name,
       tbmsCarTypeId: vehicle.tbmsCarTypeId,
-      fare: vehicle.totalFare,
+      fare: finalFare,
+      originalFare: appliedDiscountCode ? vehicle.totalFare : undefined,
+      discountCode: appliedDiscountCode,
+      discountAmount: appliedDiscountAmount,
+      netMarginPercent: appliedMarginPercent,
       driverPayout: vehicle.driverPayout,
       journeyType: quote.journeyType,
       airportCharges: quote.airportCharges,
@@ -139,9 +184,13 @@ export async function POST(req: NextRequest) {
       fareBreakdown: {
         driverPayout: vehicle.driverPayout,
         airportCharges: quote.airportCharges,
-        processingFee: Math.round((vehicle.totalFare * 0.015 + 0.2) * 100) / 100,
-        profitMargin: Math.round(vehicle.totalFare * 0.2 * 100) / 100,
-        totalFare: vehicle.totalFare,
+        processingFee: Math.round((finalFare * 0.015 + 0.2) * 100) / 100,
+        profitMargin: netProfitAmount !== undefined ? netProfitAmount : Math.round(finalFare * 0.2 * 100) / 100,
+        totalFare: finalFare,
+        originalFare: appliedDiscountCode ? vehicle.totalFare : undefined,
+        discountAmount: appliedDiscountAmount,
+        netProfit: netProfitAmount,
+        marginPercent: appliedMarginPercent,
       },
       flightNumber: flightNumber ? String(flightNumber).trim() : undefined,
       notes: notes ? String(notes).trim() : undefined,

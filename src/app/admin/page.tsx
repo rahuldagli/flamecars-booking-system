@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { DriverApplication, DocumentType, REQUIRED_DOCUMENTS_CONFIG } from '@/types/onboarding';
 import { CustomerBooking } from '@/types/booking';
 import DocumentPreviewModal from '@/components/DocumentPreviewModal';
+import PricingPromotionsSection from '@/app/admin/PricingPromotionsSection';
 
 interface StaffUser {
   name: string;
@@ -22,7 +23,7 @@ export default function AdminDashboardPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'drivers' | 'bookings'>('drivers');
+  const [activeTab, setActiveTab] = useState<'drivers' | 'bookings' | 'pricing'>('drivers');
 
   // Driver Dashboard states
   const [applications, setApplications] = useState<DriverApplication[]>([]);
@@ -1525,6 +1526,23 @@ export default function AdminDashboardPage() {
         >
           🚗 Customer Bookings ({bookings.length})
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('pricing')}
+          style={{
+            padding: '10px 18px',
+            fontWeight: 700,
+            fontSize: '14px',
+            border: 'none',
+            borderBottom: activeTab === 'pricing' ? '3px solid var(--flame-500)' : '3px solid transparent',
+            background: 'none',
+            color: activeTab === 'pricing' ? 'var(--flame-500)' : 'var(--text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          🏷️ Pricing &amp; Promotions
+        </button>
       </div>
 
       {actionMessage && (
@@ -2840,6 +2858,15 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ================= TAB 3: PRICING & PROMOTIONS ================= */}
+      {activeTab === 'pricing' && (
+        <PricingPromotionsSection
+          currentUser={currentUser}
+          adminFetch={adminFetch}
+          showMessage={(text, type) => setActionMessage({ text, type })}
+        />
       )}
 
       {/* Universal Document Preview & AI Inspector Modal */}

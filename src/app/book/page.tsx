@@ -40,6 +40,19 @@ export default function CustomerBookingPage() {
   const [notes, setNotes] = useState('');
   const [termsAgreed, setTermsAgreed] = useState(false);
 
+  // Promo / Discount Code State
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discountAmount: number;
+    discountedFare: number;
+    originalFare: number;
+    description?: string;
+  } | null>(null);
+  const [isCheckingPromo, setIsCheckingPromo] = useState(false);
+  const [promoError, setPromoError] = useState('');
+  const [promoSuccessMsg, setPromoSuccessMsg] = useState('');
+
   // Checkout State
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string>('');
@@ -209,6 +222,7 @@ export default function CustomerBookingPage() {
           customerEmail: customerEmail.trim(),
           flightNumber: flightNumber.trim() || undefined,
           notes: notes.trim() || undefined,
+          discountCode: appliedPromo?.code || undefined,
         }),
       });
 
@@ -230,6 +244,63 @@ export default function CustomerBookingPage() {
       setCheckoutError(err?.message || 'Network error processing checkout.');
       setIsCheckingOut(false);
     }
+  };
+
+  const handleApplyPromo = async () => {
+    if (!promoInput.trim()) {
+      setPromoError('Please enter a promotion code.');
+      return;
+    }
+    if (!quote) return;
+    const vObj = quote.vehicles.find((v) => v.id === selectedVehicle);
+    if (!vObj) return;
+
+    setPromoError('');
+    setPromoSuccessMsg('');
+    setIsCheckingPromo(true);
+
+    try {
+      const res = await fetch('/api/booking/discount/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: promoInput.trim().toUpperCase(),
+          fare: vObj.totalFare,
+          driverPayout: vObj.driverPayout,
+          airportCharges: quote.airportCharges,
+          airportCode: quote.airportCode,
+          vehicleCategory: vObj.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setPromoError(data.error || 'Invalid promotion code.');
+        setAppliedPromo(null);
+        return;
+      }
+
+      const resObj = data.result;
+      setAppliedPromo({
+        code: resObj.discountCode.code,
+        discountAmount: resObj.discountAmount,
+        discountedFare: resObj.discountedFare,
+        originalFare: resObj.originalFare,
+        description: resObj.discountCode.description,
+      });
+      setPromoSuccessMsg(`✓ Code '${resObj.discountCode.code}' applied! You saved £${resObj.discountAmount.toFixed(2)}.`);
+    } catch (err: any) {
+      setPromoError(err?.message || 'Error checking promo code.');
+    } finally {
+      setIsCheckingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoInput('');
+    setPromoError('');
+    setPromoSuccessMsg('');
   };
 
   const currentVehicleObj = quote?.vehicles.find((v) => v.id === selectedVehicle);
@@ -833,6 +904,112 @@ export default function CustomerBookingPage() {
                 </div>
               </div>
 
+              {/* Promo Code Input Box */}
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1px dashed #cbd5e1',
+                  borderRadius: '12px',
+                  padding: '16px 18px',
+                  marginTop: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
+                    🏷️ Have a Promotion or Discount Code?
+                  </span>
+                  {appliedPromo && (
+                    <button
+                      type="button"
+                      onClick={handleRemovePromo}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#ef4444',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Remove Code ✕
+                    </button>
+                  )}
+                </div>
+
+                {!appliedPromo ? (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      placeholder="e.g. WELCOME10, FLAME5"
+                      value={promoInput}
+                      onChange={(e) => {
+                        setPromoInput(e.target.value.toUpperCase());
+                        setPromoError('');
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '14px',
+                        textTransform: 'uppercase',
+                        fontWeight: 600,
+                        letterSpacing: '0.5px',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyPromo}
+                      disabled={isCheckingPromo || !promoInput.trim()}
+                      style={{
+                        background: '#0f172a',
+                        color: '#ffffff',
+                        padding: '10px 18px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        cursor: isCheckingPromo || !promoInput.trim() ? 'not-allowed' : 'pointer',
+                        opacity: isCheckingPromo || !promoInput.trim() ? 0.6 : 1,
+                      }}
+                    >
+                      {isCheckingPromo ? 'Checking...' : 'Apply'}
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 14px',
+                      background: '#dcfce7',
+                      border: '1px solid #86efac',
+                      borderRadius: '8px',
+                      color: '#166534',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>✓</span>
+                    <span>
+                      Code <strong>{appliedPromo.code}</strong> applied — You save £{appliedPromo.discountAmount.toFixed(2)}!
+                    </span>
+                  </div>
+                )}
+
+                {promoError && (
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#dc2626', fontWeight: 600 }}>
+                    ⚠️ {promoError}
+                  </div>
+                )}
+                {promoSuccessMsg && !promoError && !appliedPromo && (
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>
+                    {promoSuccessMsg}
+                  </div>
+                )}
+              </div>
+
               {/* Order Breakdown Box */}
               <div
                 style={{
@@ -840,7 +1017,7 @@ export default function CustomerBookingPage() {
                   border: '1px solid #e2e8f0',
                   borderRadius: '12px',
                   padding: '18px',
-                  marginTop: '20px',
+                  marginTop: '16px',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -864,6 +1041,25 @@ export default function CustomerBookingPage() {
                   <span style={{ color: '#0f172a', fontSize: '13px' }}>{quote.distanceMiles} miles</span>
                 </div>
 
+                {appliedPromo && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1' }}>
+                      <span style={{ color: '#64748b', fontSize: '14px' }}>Standard Fare:</span>
+                      <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>
+                        £{appliedPromo.originalFare.toFixed(2)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ color: '#16a34a', fontSize: '14px', fontWeight: 600 }}>
+                        Promo Code ({appliedPromo.code}):
+                      </span>
+                      <span style={{ color: '#16a34a', fontSize: '14px', fontWeight: 700 }}>
+                        -£{appliedPromo.discountAmount.toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
+
                 <div
                   style={{
                     borderTop: '1px solid #cbd5e1',
@@ -875,9 +1071,16 @@ export default function CustomerBookingPage() {
                   }}
                 >
                   <span style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Total Fare to Pay:</span>
-                  <span style={{ fontSize: '26px', fontWeight: 800, color: '#ed6b24' }}>
-                    £{currentVehicleObj.totalFare.toFixed(2)}
-                  </span>
+                  <div style={{ textAlign: 'right' }}>
+                    {appliedPromo && (
+                      <span style={{ fontSize: '15px', color: '#94a3b8', textDecoration: 'line-through', marginRight: '8px' }}>
+                        £{appliedPromo.originalFare.toFixed(2)}
+                      </span>
+                    )}
+                    <span style={{ fontSize: '26px', fontWeight: 800, color: '#ed6b24' }}>
+                      £{(appliedPromo ? appliedPromo.discountedFare : currentVehicleObj.totalFare).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               </div>
 

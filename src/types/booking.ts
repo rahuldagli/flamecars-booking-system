@@ -28,6 +28,37 @@ export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'UNPAID
 
 export type TbmsBookingStatus = 'NOT_SUBMITTED' | 'NOT_ATTEMPTED' | 'PENDING' | 'SYNCED' | 'FAILED';
 
+export type { AirportFareConfig, VehicleCategoryConfig, RatesConfig, SystemFareSettings } from '@/lib/fareConfig';
+
+export type DiscountType = 'PERCENTAGE' | 'FIXED';
+
+export interface DiscountCode {
+  id: string;
+  code: string; // e.g. "WELCOME10", uppercase
+  description?: string;
+  discountType: DiscountType; // 'PERCENTAGE' or 'FIXED'
+  discountValue: number; // e.g. 10 (%) or 5 (£)
+  expiryDate?: string; // YYYY-MM-DD or ISO string, optional
+  usageLimit?: number; // max number of uses (optional)
+  usedCount: number; // current usage count
+  minFare?: number; // minimum booking fare in GBP required to apply
+  restrictedAirports?: string[]; // e.g. ['LHR', 'LGW'] or empty for all
+  restrictedVehicles?: string[]; // e.g. ['economy', 'executive'] or empty for all
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+}
+
+export interface PricingAuditLog {
+  id: string;
+  timestamp: string; // ISO string
+  changedBy: string; // staff email / name
+  changeType: 'AIRPORT_FARE' | 'VEHICLE_MULTIPLIER' | 'RATES_MARGIN' | 'DISCOUNT_CODE' | 'SYSTEM_RESET';
+  summary: string;
+  details?: Record<string, any>;
+}
+
 export interface VehicleOption {
   id: VehicleCategory;
   category: VehicleCategory;
@@ -116,12 +147,20 @@ export interface CustomerBooking {
   fare: number;
   driverPayout?: number;
   currency?: 'GBP' | string;
+  discountCode?: string;
+  discountAmount?: number;
+  originalFare?: number;
+  netMarginPercent?: number;
   fareBreakdown?: {
     driverPayout: number;
     airportCharges: number;
     processingFee: number;
     profitMargin: number;
     totalFare: number;
+    originalFare?: number;
+    discountAmount?: number;
+    netProfit?: number;
+    marginPercent?: number;
     baseFare?: number;
     mileageFare?: number;
     airportFee?: number;

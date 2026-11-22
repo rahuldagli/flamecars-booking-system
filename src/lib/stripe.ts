@@ -48,7 +48,7 @@ export async function createStripeCheckoutSession(
   const unitAmount = Math.round(booking.fare * 100);
 
   const params = new URLSearchParams();
-  params.append('payment_method_types[0]', 'card');
+  // Note: Modern Stripe accounts manage payment methods dynamically via Stripe Dashboard (Cards, Apple Pay, Google Pay)
   params.append('mode', 'payment');
   params.append('success_url', successUrl);
   params.append('cancel_url', cancelUrl);
