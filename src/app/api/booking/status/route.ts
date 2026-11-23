@@ -25,8 +25,26 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // If already marked as paid, return current record
+    // If already marked as paid, ensure emails are dispatched if pending, then return
     if (booking.paymentStatus === 'PAID') {
+      if (!booking.customerEmailSent) {
+        try {
+          const [custRes, staffRes] = await Promise.allSettled([
+            sendCustomerBookingConfirmationEmail(booking),
+            sendStaffBookingAlertEmail(booking),
+          ]);
+          if (custRes.status === 'fulfilled' && custRes.value.success) {
+            booking.customerEmailSent = true;
+            booking.customerEmailMessageId = custRes.value.messageId;
+          }
+          if (staffRes.status === 'fulfilled' && staffRes.value.success) {
+            booking.staffEmailSent = true;
+          }
+          await bookingStore.saveAsync(booking);
+        } catch (e) {
+          console.warn('[EMAIL] Failed sending confirmation email for paid booking:', e);
+        }
+      }
       return NextResponse.json({
         success: true,
         booking,
@@ -64,16 +82,23 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // Save updated state
-        await bookingStore.saveAsync(booking);
-
-        // Send confirmation emails in background
-        sendCustomerBookingConfirmationEmail(booking).catch((e) =>
-          console.warn('[EMAIL] Failed customer confirmation email:', e)
-        );
-        sendStaffBookingAlertEmail(booking).catch((e) =>
-          console.warn('[EMAIL] Failed staff alert email:', e)
-        );
+        // Send confirmation emails (awaited to guarantee completion in serverless Cloudflare Workers)
+        try {
+          const [custRes, staffRes] = await Promise.allSettled([
+            sendCustomerBookingConfirmationEmail(booking),
+            sendStaffBookingAlertEmail(booking),
+          ]);
+          if (custRes.status === 'fulfilled' && custRes.value.success) {
+            booking.customerEmailSent = true;
+            booking.customerEmailMessageId = custRes.value.messageId;
+          }
+          if (staffRes.status === 'fulfilled' && staffRes.value.success) {
+            booking.staffEmailSent = true;
+          }
+          await bookingStore.saveAsync(booking);
+        } catch (emailErr) {
+          console.warn('[EMAIL] Failed sending confirmation emails after payment verification:', emailErr);
+        }
 
         return NextResponse.json({
           success: true,

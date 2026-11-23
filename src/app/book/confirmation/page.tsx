@@ -8,6 +8,40 @@ export default function BookingConfirmationPage() {
   const [booking, setBooking] = useState<CustomerBooking | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [isResending, setIsResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+
+  const handleResendEmail = async () => {
+    if (!booking) return;
+    setIsResending(true);
+    setResendStatus(null);
+    try {
+      const res = await fetch('/api/booking/resend-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: booking.referenceNumber }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setResendStatus({
+          success: true,
+          message: `Confirmation email sent to ${booking.customerEmail}! Please check your Inbox and Spam/Junk folder.`,
+        });
+      } else {
+        setResendStatus({
+          success: false,
+          message: data.error || data.customerResult?.message || 'Failed to dispatch email.',
+        });
+      }
+    } catch (e: any) {
+      setResendStatus({
+        success: false,
+        message: e?.message || 'Network error triggering email dispatch.',
+      });
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -301,6 +335,68 @@ export default function BookingConfirmationPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Email Receipt Notification & Resend Box */}
+        <div
+          style={{
+            background: '#ffffff',
+            border: '1px solid #fed7aa',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            marginBottom: '24px',
+            boxShadow: '0 2px 8px rgba(234, 88, 12, 0.05)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ flex: '1 1 300px' }}>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: '#9a3412', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>✉️</span> Customer Confirmation &amp; VAT Invoice
+              </div>
+              <div style={{ fontSize: '13px', color: '#4b5563', marginTop: '4px' }}>
+                Dispatched to <strong>{booking.customerEmail}</strong>. Please check your <strong>Inbox</strong> and <strong>Spam/Junk</strong> folder.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleResendEmail}
+              disabled={isResending}
+              style={{
+                background: '#ea580c',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: isResending ? 'not-allowed' : 'pointer',
+                opacity: isResending ? 0.7 : 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              {isResending ? 'Sending...' : '✉️ Resend Confirmation Email'}
+            </button>
+          </div>
+
+          {resendStatus && (
+            <div
+              style={{
+                marginTop: '12px',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                background: resendStatus.success ? '#f0fdf4' : '#fef2f2',
+                border: `1px solid ${resendStatus.success ? '#bbf7d0' : '#fecaca'}`,
+                color: resendStatus.success ? '#166534' : '#991b1b',
+              }}
+            >
+              {resendStatus.success ? '✓ ' : '⚠️ '}
+              {resendStatus.message}
+            </div>
+          )}
         </div>
 
         {/* Next Steps Guidance */}

@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const quote = bookingStore.getQuote(quoteId);
+    const quote = await bookingStore.getQuoteAsync(quoteId);
     if (!quote) {
       return NextResponse.json(
         { success: false, error: 'Quote session has expired or is invalid. Please get a fresh quote.' },
@@ -229,15 +229,27 @@ export async function POST(req: NextRequest) {
         booking.tbmsError = tbmsErr?.message || 'Failed connecting to TBMS';
       }
 
-      await bookingStore.saveAsync(booking);
-
-      // Send customer confirmation email & staff alert via Mailgun
-      sendCustomerBookingConfirmationEmail(booking).catch((e) =>
-        console.warn('[EMAIL] Failed customer confirmation email on test submission:', e)
-      );
-      sendStaffBookingAlertEmail(booking).catch((e) =>
-        console.warn('[EMAIL] Failed staff alert email on test submission:', e)
-      );
+      // Send customer confirmation email & staff alert via Mailgun (awaited to guarantee completion in serverless)
+      try {
+        const [custRes, staffRes] = await Promise.allSettled([
+          sendCustomerBookingConfirmationEmail(booking),
+          sendStaffBookingAlertEmail(booking),
+        ]);
+        if (custRes.status === 'fulfilled' && custRes.value.success) {
+          booking.customerEmailSent = true;
+          booking.customerEmailMessageId = custRes.value.messageId;
+        } else if (custRes.status === 'fulfilled' && !custRes.value.success) {
+          console.warn('[EMAIL] Customer confirmation skipped/error:', custRes.value.error);
+        } else if (custRes.status === 'rejected') {
+          console.error('[EMAIL] Customer confirmation rejected:', custRes.reason);
+        }
+        if (staffRes.status === 'fulfilled' && staffRes.value.success) {
+          booking.staffEmailSent = true;
+        }
+        await bookingStore.saveAsync(booking);
+      } catch (emailErr) {
+        console.error('[EMAIL] Exception sending test confirmation emails:', emailErr);
+      }
 
       const confirmationUrl = `${baseUrl}/book/confirmation?ref=${encodeURIComponent(booking.referenceNumber)}&test=1`;
 

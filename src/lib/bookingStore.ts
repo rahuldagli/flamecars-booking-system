@@ -140,6 +140,23 @@ export const bookingStore = {
   // Quote management
   saveQuote(quote: BookingQuote): void {
     global.__flamecars_quotes!.set(quote.quoteId, quote);
+    this.saveQuoteAsync(quote).catch(() => {});
+  },
+
+  async saveQuoteAsync(quote: BookingQuote): Promise<void> {
+    global.__flamecars_quotes!.set(quote.quoteId, quote);
+    try {
+      const cache = (globalThis as any).caches?.default;
+      if (cache) {
+        const domain = getCacheDomain();
+        await cache.put(
+          new Request(`${domain}/__cache__/quote/${encodeURIComponent(quote.quoteId)}`),
+          new Response(JSON.stringify(quote), {
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=7200' },
+          })
+        );
+      }
+    } catch {}
   },
 
   getQuote(quoteId: string): BookingQuote | undefined {
@@ -152,6 +169,28 @@ export const bookingStore = {
       return undefined;
     }
     return q;
+  },
+
+  async getQuoteAsync(quoteId: string): Promise<BookingQuote | undefined> {
+    if (!quoteId) return undefined;
+    const local = this.getQuote(quoteId);
+    if (local) return local;
+
+    try {
+      const cache = (globalThis as any).caches?.default;
+      if (cache) {
+        const domain = getCacheDomain();
+        const res = await cache.match(new Request(`${domain}/__cache__/quote/${encodeURIComponent(quoteId)}`));
+        if (res) {
+          const q: BookingQuote = await res.json();
+          if (q && new Date(q.expiresAt).getTime() > Date.now()) {
+            global.__flamecars_quotes!.set(q.quoteId, q);
+            return q;
+          }
+        }
+      }
+    } catch {}
+    return undefined;
   },
 
   // Booking management

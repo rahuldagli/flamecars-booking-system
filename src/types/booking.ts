@@ -193,7 +193,9 @@ export interface CustomerBooking {
 
   // Notifications
   customerEmailSent?: boolean;
+  customerEmailMessageId?: string;
   adminEmailSent?: boolean;
+  staffEmailSent?: boolean;
 
   createdAt: string;
   updatedAt: string;
