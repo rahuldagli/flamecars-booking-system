@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAuth } from '@/lib/auth';
 import { bookingStore } from '@/lib/bookingStore';
 import { syncCustomerBookingToTbms } from '@/lib/tbms';
+import { sendCustomerBookingConfirmationEmail, sendStaffBookingAlertEmail } from '@/lib/mailgun';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAdminAuth(req);
@@ -66,6 +67,43 @@ export async function POST(req: NextRequest) {
         tbmsStatus: booking.tbmsStatus,
         jobReference: booking.tbmsJobReference,
         error: tbmsRes.error,
+        booking,
+      });
+    }
+
+    if (action === 'resend-email') {
+      const [custRes, staffRes] = await Promise.allSettled([
+        sendCustomerBookingConfirmationEmail(booking),
+        sendStaffBookingAlertEmail(booking),
+      ]);
+
+      let emailSuccess = false;
+      let emailError: string | undefined = undefined;
+
+      if (custRes.status === 'fulfilled') {
+        emailSuccess = custRes.value.success;
+        if (custRes.value.success) {
+          booking.customerEmailSent = true;
+          booking.customerEmailMessageId = custRes.value.messageId;
+        } else {
+          emailError = custRes.value.error;
+        }
+      } else {
+        emailError = custRes.reason?.message || 'Email dispatch rejected';
+      }
+
+      if (staffRes.status === 'fulfilled' && staffRes.value.success) {
+        booking.staffEmailSent = true;
+      }
+
+      booking.updatedAt = new Date().toISOString();
+      await bookingStore.saveAsync(booking);
+
+      return NextResponse.json({
+        success: emailSuccess,
+        customerEmail: booking.customerEmail,
+        messageId: booking.customerEmailMessageId,
+        error: emailError,
         booking,
       });
     }

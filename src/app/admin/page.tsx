@@ -44,6 +44,7 @@ export default function AdminDashboardPage() {
   const [bookingFilter, setBookingFilter] = useState<string>('ALL');
   const [bookingSearch, setBookingSearch] = useState<string>('');
   const [retryingTbmsRef, setRetryingTbmsRef] = useState<string | null>(null);
+  const [resendingBookingEmailRef, setResendingBookingEmailRef] = useState<string | null>(null);
 
   // Document modal preview
   const [inspectDocType, setInspectDocType] = useState<DocumentType | null>(null);
@@ -225,6 +226,38 @@ export default function AdminDashboardPage() {
       setActionMessage({ text: `Network error retrying TBMS: ${err.message}`, type: 'error' });
     } finally {
       setRetryingTbmsRef(null);
+    }
+  }
+
+  // Resend booking confirmation email to customer & alert to staff
+  async function resendBookingEmail(bookingRef: string) {
+    setResendingBookingEmailRef(bookingRef);
+    try {
+      const res = await adminFetch('/api/admin/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingRef, action: 'resend-email' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionMessage({
+          text: `Confirmation email successfully resent to ${data.customerEmail || 'customer'}!`,
+          type: 'success',
+        });
+        await loadBookings(false);
+        if (selectedBooking && selectedBooking.referenceNumber === bookingRef) {
+          setSelectedBooking(data.booking);
+        }
+      } else {
+        setActionMessage({
+          text: `Failed to resend confirmation email for ${bookingRef}: ${data.error || 'Server error'}`,
+          type: 'error',
+        });
+      }
+    } catch (err: any) {
+      setActionMessage({ text: `Network error resending email: ${err.message}`, type: 'error' });
+    } finally {
+      setResendingBookingEmailRef(null);
     }
   }
 
@@ -2644,6 +2677,21 @@ export default function AdminDashboardPage() {
                               ? 'TBMS Sync Failed'
                               : 'Not Dispatched'}
                           </span>
+
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              padding: '3px 8px',
+                              borderRadius: '12px',
+                              background: b.customerEmailSent
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : 'rgba(245, 158, 11, 0.15)',
+                              color: b.customerEmailSent ? '#047857' : '#b45309',
+                            }}
+                          >
+                            ✉️ {b.customerEmailSent ? 'EMAIL SENT' : 'EMAIL PENDING'}
+                          </span>
                         </div>
                       </div>
 
@@ -2727,6 +2775,28 @@ export default function AdminDashboardPage() {
                           style={{ fontSize: '12px', padding: '6px 12px' }}
                         >
                           👁️ View Full Details
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={resendingBookingEmailRef === b.referenceNumber}
+                          onClick={() => resendBookingEmail(b.referenceNumber)}
+                          style={{
+                            background: '#f8fafc',
+                            color: '#334155',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '6px 12px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: resendingBookingEmailRef === b.referenceNumber ? 'wait' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}
+                          title={`Resend confirmation email to ${b.customerEmail}`}
+                        >
+                          {resendingBookingEmailRef === b.referenceNumber ? '⏳ Sending...' : '✉️ Resend Email'}
                         </button>
 
                         {(!isTbmsSynced || isTbmsFailed) && (
@@ -2822,10 +2892,33 @@ export default function AdminDashboardPage() {
                     <strong>TBMS Dispatch Status:</strong> {selectedBooking.tbmsStatus}<br />
                     {selectedBooking.tbmsJobReference && <span><strong>TBMS Job Ref:</strong> {selectedBooking.tbmsJobReference}<br /></span>}
                     {selectedBooking.tbmsError && <span style={{ color: '#b91c1c' }}><strong>TBMS Error:</strong> {selectedBooking.tbmsError}<br /></span>}
+                    <strong>Confirmation Email:</strong> {selectedBooking.customerEmailSent ? `✓ Sent to ${selectedBooking.customerEmail}` : '⏳ Pending / Not Sent'}<br />
+                    {selectedBooking.customerEmailMessageId && <span><strong>Email ID:</strong> <code style={{ fontSize: '11px', color: '#64748b' }}>{selectedBooking.customerEmailMessageId}</code><br /></span>}
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    disabled={resendingBookingEmailRef === selectedBooking.referenceNumber}
+                    onClick={() => resendBookingEmail(selectedBooking.referenceNumber)}
+                    style={{
+                      background: '#f8fafc',
+                      color: '#0f172a',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      padding: '10px 18px',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      cursor: resendingBookingEmailRef === selectedBooking.referenceNumber ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    {resendingBookingEmailRef === selectedBooking.referenceNumber ? '⏳ Sending...' : '✉️ Resend Confirmation Email'}
+                  </button>
+
                   {selectedBooking.tbmsStatus !== 'SYNCED' && (
                     <button
                       type="button"
