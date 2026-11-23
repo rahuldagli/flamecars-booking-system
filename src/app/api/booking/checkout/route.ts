@@ -4,6 +4,8 @@ import { createStripeCheckoutSession } from '@/lib/stripe';
 import { CustomerBooking, VehicleCategory } from '@/types/booking';
 import { getEnv } from '@/lib/env';
 import { validateAndCalculateDiscount, recordDiscountUsage } from '@/lib/fareConfig';
+import { syncCustomerBookingToTbms } from '@/lib/tbms';
+import { sendCustomerBookingConfirmationEmail, sendStaffBookingAlertEmail } from '@/lib/mailgun';
 
 function resolveBaseUrl(req: NextRequest): string {
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
@@ -30,6 +32,7 @@ export async function POST(req: NextRequest) {
       flightNumber,
       notes,
       discountCode,
+      isTestSubmission,
     } = body || {};
 
     if (!quoteId || typeof quoteId !== 'string') {
@@ -202,6 +205,53 @@ export async function POST(req: NextRequest) {
     };
 
     const baseUrl = resolveBaseUrl(req);
+
+    // Option: Test Submission without Payment (Instant Confirmation, TBMS Sync & Email Dispatch)
+    if (isTestSubmission) {
+      booking.paymentStatus = 'PAID';
+      booking.bookingStatus = 'CONFIRMED';
+      booking.paymentMethod = 'TEST_BYPASS';
+      booking.paidAt = nowIso;
+
+      // Dispatch to TBMS live dispatch engine
+      try {
+        const tbmsResult = await syncCustomerBookingToTbms(booking);
+        if (tbmsResult.success) {
+          booking.tbmsStatus = 'SYNCED';
+          booking.tbmsJobReference = tbmsResult.jobReference;
+          booking.tbmsSyncedAt = nowIso;
+        } else {
+          booking.tbmsStatus = 'FAILED';
+          booking.tbmsError = tbmsResult.error;
+        }
+      } catch (tbmsErr: any) {
+        booking.tbmsStatus = 'FAILED';
+        booking.tbmsError = tbmsErr?.message || 'Failed connecting to TBMS';
+      }
+
+      await bookingStore.saveAsync(booking);
+
+      // Send customer confirmation email & staff alert via Mailgun
+      sendCustomerBookingConfirmationEmail(booking).catch((e) =>
+        console.warn('[EMAIL] Failed customer confirmation email on test submission:', e)
+      );
+      sendStaffBookingAlertEmail(booking).catch((e) =>
+        console.warn('[EMAIL] Failed staff alert email on test submission:', e)
+      );
+
+      const confirmationUrl = `${baseUrl}/book/confirmation?ref=${encodeURIComponent(booking.referenceNumber)}&test=1`;
+
+      return NextResponse.json({
+        success: true,
+        bookingId: booking.id,
+        referenceNumber: booking.referenceNumber,
+        checkoutUrl: confirmationUrl,
+        isTestSubmission: true,
+        tbmsStatus: booking.tbmsStatus,
+        tbmsJobReference: booking.tbmsJobReference,
+      });
+    }
+
     const checkoutResult = await createStripeCheckoutSession(booking, baseUrl);
 
     if (!checkoutResult.success || !checkoutResult.checkoutUrl) {

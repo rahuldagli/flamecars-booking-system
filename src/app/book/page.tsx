@@ -177,8 +177,8 @@ export default function CustomerBookingPage() {
   };
 
   // Step 3 Checkout
-  const handleProceedToPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleProceedToPayment = async (e?: React.FormEvent, isTest: boolean = false) => {
+    if (e) e.preventDefault();
     setCheckoutError('');
 
     if (!quote) {
@@ -223,6 +223,7 @@ export default function CustomerBookingPage() {
           flightNumber: flightNumber.trim() || undefined,
           notes: notes.trim() || undefined,
           discountCode: appliedPromo?.code || undefined,
+          isTestSubmission: isTest,
         }),
       });
 
@@ -233,7 +234,7 @@ export default function CustomerBookingPage() {
         return;
       }
 
-      // Redirect to Stripe Checkout or local demo confirmation
+      // Redirect to Stripe Checkout or local demo/test confirmation
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
@@ -1118,7 +1119,7 @@ export default function CustomerBookingPage() {
               )}
 
               {/* Actions */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginTop: '24px' }}>
                 <button
                   type="button"
                   onClick={() => setStep(2)}
@@ -1136,27 +1137,57 @@ export default function CustomerBookingPage() {
                   ← Back
                 </button>
 
-                <button
-                  type="submit"
-                  disabled={isCheckingOut || !termsAgreed}
-                  style={{
-                    background: '#ed6b24',
-                    color: '#ffffff',
-                    padding: '14px 28px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 700,
-                    fontSize: '16px',
-                    cursor: isCheckingOut || !termsAgreed ? 'not-allowed' : 'pointer',
-                    opacity: isCheckingOut || !termsAgreed ? 0.6 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    boxShadow: '0 4px 14px rgba(237, 107, 36, 0.3)',
-                  }}
-                >
-                  🔒 {isCheckingOut ? 'Opening Secure Payment...' : `Pay £${currentVehicleObj.totalFare.toFixed(2)} Securely →`}
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleProceedToPayment(undefined, true)}
+                      disabled={isCheckingOut || !termsAgreed}
+                      style={{
+                        background: '#f8fafc',
+                        color: '#0f172a',
+                        padding: '13px 20px',
+                        borderRadius: '8px',
+                        border: '1px dashed #cbd5e1',
+                        fontWeight: 700,
+                        fontSize: '14px',
+                        cursor: isCheckingOut || !termsAgreed ? 'not-allowed' : 'pointer',
+                        opacity: isCheckingOut || !termsAgreed ? 0.6 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                      title="Instantly test booking confirmation, email receipt, and TBMS dispatch without a card charge"
+                    >
+                      🧪 Test Booking (Bypass Payment)
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={isCheckingOut || !termsAgreed}
+                      style={{
+                        background: '#ed6b24',
+                        color: '#ffffff',
+                        padding: '14px 28px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        fontWeight: 700,
+                        fontSize: '16px',
+                        cursor: isCheckingOut || !termsAgreed ? 'not-allowed' : 'pointer',
+                        opacity: isCheckingOut || !termsAgreed ? 0.6 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        boxShadow: '0 4px 14px rgba(237, 107, 36, 0.3)',
+                      }}
+                    >
+                      🔒 {isCheckingOut ? 'Opening Secure Payment...' : `Pay £${(appliedPromo ? appliedPromo.discountedFare : currentVehicleObj.totalFare).toFixed(2)} Securely →`}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b' }}>
+                    💡 Testing? Click <strong>Test Booking</strong> to confirm the journey, sync to TBMS, and send confirmation emails without charging a card.
+                  </div>
+                </div>
               </div>
 
               <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '12px', color: '#94a3b8' }}>

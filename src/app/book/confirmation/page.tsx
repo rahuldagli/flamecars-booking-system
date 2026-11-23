@@ -160,6 +160,25 @@ export default function BookingConfirmationPage() {
           >
             Booking Ref: {booking.referenceNumber}
           </div>
+
+          {/* Test Submission Notice */}
+          {booking.paymentMethod === 'TEST_BYPASS' && (
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '12px 16px',
+                borderRadius: '10px',
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                color: '#1e40af',
+                fontSize: '13px',
+                lineHeight: '1.5',
+                textAlign: 'left',
+              }}
+            >
+              <strong>🧪 Test Submission Mode:</strong> No real payment was charged. Confirmation email receipt has been dispatched to <strong>{booking.customerEmail}</strong> and job synced to TBMS ({booking.tbmsStatus === 'SYNCED' ? `Job #${booking.tbmsJobReference}` : 'Alerted'}).
+            </div>
+          )}
         </div>
 
         {/* Live System Status Badges */}
@@ -188,7 +207,11 @@ export default function BookingConfirmationPage() {
                 Payment Status
               </div>
               <div style={{ fontSize: '14px', fontWeight: 700, color: isPaid ? '#15803d' : '#b45309' }}>
-                {isPaid ? 'Paid in Full via Stripe' : 'Awaiting Confirmation'}
+                {isPaid
+                  ? booking.paymentMethod === 'TEST_BYPASS'
+                    ? 'Test Booking (Confirmed)'
+                    : 'Paid in Full via Stripe'
+                  : 'Awaiting Confirmation'}
               </div>
             </div>
           </div>

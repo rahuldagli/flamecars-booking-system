@@ -11,22 +11,24 @@ export interface SendEmailResult {
 
 /**
  * Returns the base application URL for generating preview & modify links.
+ * Dynamically resolves any custom domain or subdomain (e.g. book.flamecars.co.uk)
+ * or workers.dev hostname.
  */
 export function getAppBaseUrl(req?: Request): string {
   if (req) {
     const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
-    if (host && host.includes('workers.dev')) {
+    if (host) {
       const proto = req.headers.get('x-forwarded-proto') || 'https';
       return `${proto}://${host}`.replace(/\/+$/, '');
     }
     const origin = req.headers.get('origin');
-    if (origin && origin.includes('workers.dev')) {
+    if (origin) {
       return origin.replace(/\/+$/, '');
     }
   }
 
   const publicAppUrl = getEnv('NEXT_PUBLIC_APP_URL');
-  if (publicAppUrl && publicAppUrl.includes('workers.dev')) {
+  if (publicAppUrl) {
     return publicAppUrl.replace(/\/+$/, '');
   }
 
