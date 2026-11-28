@@ -1,6 +1,7 @@
 import { DriverApplication, DocumentType } from '@/types/onboarding';
 import { CustomerBooking } from '@/types/booking';
 import { getEnv } from '@/lib/env';
+import { PORTAL_PRODUCTION_ORIGINS } from '@/lib/subdomains';
 
 export interface SendEmailResult {
   success: boolean;
@@ -33,6 +34,14 @@ export function getAppBaseUrl(req?: Request): string {
   }
 
   return 'https://flamecars-booking-system.rahuldagli.workers.dev';
+}
+
+export function getPortalBaseUrl(portal: 'bookings' | 'driver' | 'staff', req?: Request): string {
+  const base = getAppBaseUrl(req);
+  if (base.includes('flamecars.co.uk')) {
+    return PORTAL_PRODUCTION_ORIGINS[portal];
+  }
+  return base;
 }
 
 function toBase64(str: string): string {
@@ -390,7 +399,8 @@ export async function sendStaffNewDriverNotificationEmail(
   adminUrl?: string
 ): Promise<SendEmailResult> {
   const adminEmail = getEnv('ADMIN_NOTIFICATION_EMAIL', 'hello@flamecars.co.uk');
-  const dashboardUrl = adminUrl || `${getAppBaseUrl()}/admin`;
+  const staffOrigin = getPortalBaseUrl('staff');
+  const dashboardUrl = adminUrl || (staffOrigin.includes('staff.flamecars.co.uk') ? staffOrigin : `${staffOrigin}/admin`);
 
   const subject = `🚨 New Driver Application: ${app.legalName} (${app.vrm || 'No VRM'}) [Ref: ${app.referenceNumber}]`;
 
@@ -858,7 +868,7 @@ export async function sendStaffBookingAlertEmail(booking: CustomerBooking): Prom
       </table>
 
       <div style="margin-top: 24px; text-align: center;">
-        <a href="${getAppBaseUrl()}/admin" style="background: #ea580c; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block;">
+        <a href="${getPortalBaseUrl('staff').includes('staff.flamecars.co.uk') ? getPortalBaseUrl('staff') : `${getPortalBaseUrl('staff')}/admin`}" style="background: #ea580c; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block;">
           View in Staff Operations Dashboard &rarr;
         </a>
       </div>
@@ -877,7 +887,7 @@ To: ${booking.destinationAddress}
 Vehicle: ${booking.vehicleName} (£${booking.fare.toFixed(2)})
 TBMS: ${booking.tbmsStatus} ${booking.tbmsJobReference || ''}
 
-Staff Dashboard: ${getAppBaseUrl()}/admin
+Staff Dashboard: ${getPortalBaseUrl('staff').includes('staff.flamecars.co.uk') ? getPortalBaseUrl('staff') : `${getPortalBaseUrl('staff')}/admin`}
 `.trim();
 
   return await sendMailgunMessage({
